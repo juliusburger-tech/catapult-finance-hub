@@ -1,65 +1,143 @@
-import Image from "next/image";
+import { Suspense } from "react";
+import Link from "next/link";
 
-export default function Home() {
+import { DashboardYearSelect } from "@/components/dashboard/dashboard-year-select";
+import { KpiCard } from "@/components/dashboard/kpi-card";
+import { RevenueProfitChart } from "@/components/dashboard/revenue-profit-chart";
+import { TaxPreviewCard } from "@/components/dashboard/tax-preview-card";
+import { Button } from "@/components/ui/button";
+import { formatBwaPeriod } from "@/lib/bwa/months";
+import { getDashboardData } from "@/lib/dashboard/get-dashboard-data";
+import { formatEuro } from "@/lib/format";
+
+export const dynamic = "force-dynamic";
+
+type DashboardPageProps = {
+  searchParams: Promise<{ year?: string }>;
+};
+
+function parseYearParam(raw: string | undefined): number {
+  const fallback = new Date().getFullYear();
+  if (raw === undefined || raw === "") {
+    return fallback;
+  }
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 2000 || n > 2100) {
+    return fallback;
+  }
+  return n;
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const params = await searchParams;
+  const year = parseYearParam(params.year);
+  const data = await getDashboardData(year);
+
+  const today = new Date();
+  const rhythmYear = today.getFullYear();
+  const rhythmMonth = today.getMonth() + 1;
+  const rhythmHref = `/monatsueberblick?year=${rhythmYear}&month=${rhythmMonth}`;
+  const rhythmLabel = formatBwaPeriod(rhythmMonth, rhythmYear);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-10">
+      <header className="flex flex-col gap-2">
+        <p className="text-xs font-semibold tracking-wide text-[var(--color-primary)]">
+          <span className="text-[var(--color-text-subtle)]">— </span>
+          Übersicht
+          <span className="text-[var(--color-text-subtle)]"> —</span>
+        </p>
+        <h1 className="text-3xl font-black tracking-tight text-[var(--color-text)] md:text-4xl">
+          Finanzdashboard
+        </h1>
+        <p className="max-w-2xl text-base text-[var(--color-text-muted)]">
+          Kennzahlen aus den erfassten BWAs, Monatsverlauf und eine kompakte
+          Steuer-Vorschau auf Basis der hinterlegten Regeln.
+        </p>
+      </header>
+
+      <aside
+        className="flex flex-col gap-3 rounded-[var(--radius-container-token)] border border-[var(--color-border-token)] bg-[var(--color-surface)] p-5 sm:flex-row sm:items-center sm:justify-between"
+        style={{ boxShadow: "var(--shadow-card-token)" }}
+      >
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-semibold tracking-wide text-[var(--color-primary)]">
+            <span className="text-[var(--color-text-subtle)]">— </span>
+            Monatsrhythmus
+            <span className="text-[var(--color-text-subtle)]"> —</span>
+          </p>
+          <p className="text-sm font-medium text-[var(--color-text)]">
+            Kumulierte Auswertung und Steuer-Forecast für{" "}
+            <span className="text-[var(--color-primary)]">{rhythmLabel}</span>
+          </p>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            BWA einpflegen, Lücken sehen, direkt mit Upload-Formular verknüpft.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        <Button asChild className="shrink-0 self-start sm:self-center">
+          <Link href={rhythmHref}>Zum Monatsüberblick</Link>
+        </Button>
+      </aside>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          label="Umsatz YTD"
+          value={formatEuro(data.revenueYtd)}
+          hint={`Summe Umsatz aller BWAs ${data.year}`}
+        />
+        <KpiCard
+          label="Gewinn YTD"
+          value={formatEuro(data.profitYtd)}
+          hint={`Summe Gewinn aller BWAs ${data.year}`}
+        />
+        <KpiCard
+          label="Ø Monatsumsatz"
+          value={formatEuro(data.avgMonthlyRevenue)}
+          hint={
+            data.monthsWithData > 0
+              ? `Umsatz YTD ÷ ${data.monthsWithData} Monat(e) mit BWA`
+              : "Noch keine BWAs für dieses Jahr"
+          }
+        />
+        <KpiCard
+          label="Letzte BWA"
+          value={data.lastBwaLabel}
+          hint="Zuletzt hochgeladen (über alle Jahre)"
+        />
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-semibold tracking-wide text-[var(--color-primary)]">
+              <span className="text-[var(--color-text-subtle)]">— </span>
+              Verlauf
+              <span className="text-[var(--color-text-subtle)]"> —</span>
+            </p>
+            <h2 className="text-xl font-extrabold tracking-tight text-[var(--color-text)]">
+              Monatsumsatz und Gewinn
+            </h2>
+          </div>
+          <Suspense
+            fallback={
+              <div className="h-9 w-[140px] animate-pulse rounded-md bg-[var(--color-surface-raised)]" />
+            }
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <DashboardYearSelect years={data.yearOptions} value={data.year} />
+          </Suspense>
         </div>
-      </main>
+        <div
+          className="rounded-[var(--radius-container-token)] border bg-[var(--color-surface)] p-4 sm:p-6"
+          style={{
+            borderColor: "var(--color-border-token)",
+            boxShadow: "var(--shadow-card-token)",
+          }}
+        >
+          <RevenueProfitChart data={data.monthly} year={data.year} />
+        </div>
+      </section>
+
+      <TaxPreviewCard tax={data.tax} dashboardYear={data.year} />
     </div>
   );
 }

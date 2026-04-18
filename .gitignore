@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# prisma (local sqlite)
+/prisma/finance.db
+/prisma/finance.db-journal
+
+# uploaded BWAs (keep folder)
+/public/uploads/bwa/*
+!/public/uploads/bwa/.gitkeep

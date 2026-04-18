@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model BwaEntry {
+  id             String   @id @default(cuid())
+  month          Int
+  year           Int
+  filename       String
+  filePath       String
+  uploadedAt     DateTime @default(now())
+  revenue        Float?
+  personnelCosts Float?
+  operatingCosts Float?
+  profit         Float?
+  cashPosition   Float?
+  notes          String?
+
+  @@unique([year, month], name: "bwa_year_month")
+  @@index([uploadedAt])
+}
+
+model TaxPayment {
+  id        String   @id @default(cuid())
+  date      DateTime
+  type      String
+  amount    Float
+  quarter   Int?
+  year      Int
+  notes     String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+
+  @@index([year, status])
+}
+
+model TaxConfig {
+  id              String   @id @default(cuid())
+  year            Int      @unique
+  hebesatz        Float    @default(400)
+  estRatePartner1 Float    @default(35)
+  estRatePartner2 Float    @default(35)
+  profitSplitP1   Float    @default(50)
+  updatedAt       DateTime @updatedAt
+}
