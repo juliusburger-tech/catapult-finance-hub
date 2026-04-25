@@ -43,6 +43,10 @@ function formatMonthYear(month: number, year: number): string {
   );
 }
 
+function formatKpiEuro(value: number): string {
+  return formatEuro(value).replace(/\s/g, "\u00A0");
+}
+
 function toEntryTypeLabel(entryType: string): string {
   const map: Record<string, string> = {
     retainer: "Monatlich",
@@ -165,16 +169,16 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <KpiCard label="Rechnungen gestellt" value={`${invoicesSentCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Rechnungen ausstehend" value={`${invoicePendingCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Bezahlt" value={`${paidCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Offen (unbezahlt)" value={`${unpaidCount}`} hint={`von ${totalEntries}`} />
-        <KpiCard label="Soll-Umsatz" value={formatEuro(plannedRevenue)} />
-        <KpiCard label="Ist-Umsatz" value={formatEuro(actualRevenue)} />
+        <KpiCard label="Soll-Umsatz" value={formatKpiEuro(plannedRevenue)} />
+        <KpiCard label="Ist-Umsatz" value={formatKpiEuro(actualRevenue)} />
         <KpiCard
           label="Monatlicher Retainer-Cashflow"
-          value={formatEuro(retainerCashflow)}
+          value={formatKpiEuro(retainerCashflow)}
           hint={`${retainerEntries.length} Retainer-Posten`}
         />
       </section>
