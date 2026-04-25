@@ -10,6 +10,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import type { TooltipContentProps } from "recharts";
+import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
+
 
 import { formatEuro } from "@/lib/format";
 import type { MonthlyChartPoint } from "@/lib/dashboard/get-dashboard-data";
@@ -27,13 +30,14 @@ export function RevenueProfitChart({ data, year }: RevenueProfitChartProps) {
     marge: row.revenue > 0 ? row.profit / row.revenue : null,
   }));
 
-  function renderTooltip(props: any) {
+  function renderTooltip(props: TooltipContentProps<ValueType, NameType>) {
     const { active, payload, label } = props ?? {};
     if (!active || !payload || payload.length === 0) return null;
 
-    const umsatz = payload.find((p: any) => p?.dataKey === "umsatz")?.value ?? 0;
-    const gewinn = payload.find((p: any) => p?.dataKey === "gewinn")?.value ?? 0;
-    const marge = payload[0]?.payload?.marge ?? null;
+    const umsatz = payload.find((p) => p?.dataKey === "umsatz")?.value ?? 0;
+    const gewinn = payload.find((p) => p?.dataKey === "gewinn")?.value ?? 0;
+    const firstPayload = payload[0]?.payload as { marge?: number | null } | undefined;
+    const marge = firstPayload?.marge ?? null;
 
     return (
       <div
