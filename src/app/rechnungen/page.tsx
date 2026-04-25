@@ -106,6 +106,19 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
       },
     },
   });
+  const yearlyClosedDeals = await prisma.customer.findMany({
+    where: {
+      closingDate: {
+        gte: new Date(year, 0, 1),
+        lt: new Date(year + 1, 0, 1),
+      },
+    },
+    include: {
+      paymentEntries: {
+        select: { amount: true },
+      },
+    },
+  });
 
   const totalEntries = entries.length;
   const invoicesSentCount = entries.filter((entry) => entry.invoiceSent).length;
@@ -123,6 +136,20 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
       sum + customer.paymentEntries.reduce((customerSum, entry) => customerSum + entry.amount, 0),
     0,
   );
+  const quarterDealVolume = yearlyClosedDeals.reduce(
+    (acc, customer) => {
+      if (!customer.closingDate) return acc;
+      const quarter = Math.floor(customer.closingDate.getMonth() / 3);
+      const customerVolume = customer.paymentEntries.reduce(
+        (customerSum, entry) => customerSum + entry.amount,
+        0,
+      );
+      acc[quarter] += customerVolume;
+      return acc;
+    },
+    [0, 0, 0, 0] as [number, number, number, number],
+  );
+  const yearlyDealVolumeTotal = quarterDealVolume.reduce((sum, value) => sum + value, 0);
 
   const dueNotSentCount =
     isCurrentMonth && totalEntries > 0
@@ -196,11 +223,48 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
         <KpiCard label="Offen (unbezahlt)" value={`${unpaidCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Soll-Umsatz" value={formatKpiEuro(plannedRevenue)} />
         <KpiCard label="Ist-Umsatz" value={formatKpiEuro(actualRevenue)} />
-        <KpiCard
-          label="Abgeschlossenes Dealvolumen (AV)"
-          value={formatKpiEuro(closedDealVolume)}
-          hint={`${closedDeals.length} Closings im Monat`}
-        />
+        <div
+          className="flex flex-col gap-2 rounded-[var(--radius-card-token)] border bg-[var(--color-surface)] p-5"
+          style={{
+            borderColor: "var(--color-border-token)",
+            boxShadow: "var(--shadow-card-token)",
+          }}
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-subtle)]">
+            Abgeschlossenes Dealvolumen (AV)
+          </p>
+          <p className="text-2xl font-extrabold tracking-tight text-[var(--color-text)]">
+            {formatKpiEuro(closedDealVolume)}
+          </p>
+          <p className="text-sm text-[var(--color-text-muted)]">{closedDeals.length} Closings im Monat</p>
+          <details className="rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface-raised)] px-3 py-2">
+            <summary className="cursor-pointer text-xs font-semibold text-[var(--color-text)]">
+              Quartalsübersicht {year}
+            </summary>
+            <div className="mt-2 flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+              <p className="flex items-center justify-between gap-2">
+                <span>Q1</span>
+                <span className="font-semibold text-[var(--color-text)]">{formatKpiEuro(quarterDealVolume[0])}</span>
+              </p>
+              <p className="flex items-center justify-between gap-2">
+                <span>Q2</span>
+                <span className="font-semibold text-[var(--color-text)]">{formatKpiEuro(quarterDealVolume[1])}</span>
+              </p>
+              <p className="flex items-center justify-between gap-2">
+                <span>Q3</span>
+                <span className="font-semibold text-[var(--color-text)]">{formatKpiEuro(quarterDealVolume[2])}</span>
+              </p>
+              <p className="flex items-center justify-between gap-2">
+                <span>Q4</span>
+                <span className="font-semibold text-[var(--color-text)]">{formatKpiEuro(quarterDealVolume[3])}</span>
+              </p>
+              <p className="mt-1 border-t border-[var(--color-border-token)] pt-1.5 flex items-center justify-between gap-2">
+                <span className="font-semibold text-[var(--color-text)]">Gesamt DV {year}</span>
+                <span className="font-extrabold text-[var(--color-primary)]">{formatKpiEuro(yearlyDealVolumeTotal)}</span>
+              </p>
+            </div>
+          </details>
+        </div>
         <KpiCard
           label="Monatlicher Retainer-Cashflow"
           value={formatKpiEuro(retainerCashflow)}
