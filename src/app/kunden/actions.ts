@@ -32,6 +32,16 @@ function parseCsvDate(value: string): Date | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
+  const excelSerial = Number(trimmed.replace(",", "."));
+  if (Number.isFinite(excelSerial) && excelSerial > 20000 && excelSerial < 90000) {
+    const base = new Date(Date.UTC(1899, 11, 30));
+    const millis = excelSerial * 24 * 60 * 60 * 1000;
+    const converted = new Date(base.getTime() + millis);
+    if (!Number.isNaN(converted.getTime())) {
+      return new Date(converted.getUTCFullYear(), converted.getUTCMonth(), converted.getUTCDate());
+    }
+  }
+
   const ymdMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (ymdMatch) {
     const year = Number(ymdMatch[1]);
@@ -89,9 +99,14 @@ function normalizeValue(value: string): string {
 }
 
 function getCell(row: Record<string, string>, aliases: string[]): string {
+  const normalizedAliases = aliases.map((alias) => normalizeColumnName(alias));
   for (const [key, raw] of Object.entries(row)) {
     const normalized = normalizeColumnName(key);
-    if (aliases.some((alias) => normalizeColumnName(alias) === normalized)) {
+    if (
+      normalizedAliases.some(
+        (alias) => normalized === alias || normalized.includes(alias) || alias.includes(normalized),
+      )
+    ) {
       return raw ?? "";
     }
   }
@@ -351,11 +366,17 @@ export async function importCustomersFromCsv(
   let skipped = 0;
 
   for (const row of rows) {
-    const name = getCell(row, ["Kunde", "Kundenname", "Name"]).trim();
+    const name = getCell(row, ["Kunde", "Kundenname", "Name", "Firma", "Unternehmen"]).trim();
     const statusRaw = normalizeValue(getCell(row, ["Status"]));
-    const paymentModelRaw = normalizeValue(getCell(row, ["Zahlungsmodell", "Modell"]));
-    const paymentDayRaw = normalizeValue(getCell(row, ["Zahlungstag", "Tag"]));
-    const paymentMethodRaw = normalizeValue(getCell(row, ["Zahlungsart", "Zahlungsweise"]));
+    const paymentModelRaw = normalizeValue(
+      getCell(row, ["Zahlungsmodell", "Modell", "Abrechnungsmodell", "Payment Model"]),
+    );
+    const paymentDayRaw = normalizeValue(
+      getCell(row, ["Zahlungstag", "Tag", "Faelligkeit", "Fälligkeit", "Pay Day"]),
+    );
+    const paymentMethodRaw = normalizeValue(
+      getCell(row, ["Zahlungsart", "Zahlungsweise", "Payment Method"]),
+    );
 
     const status: "active" | "completed" | "planned" =
       statusRaw.includes("abgeschlossen")
@@ -385,10 +406,16 @@ export async function importCustomersFromCsv(
 
     const paymentMethod: "sepa" | "transfer" =
       paymentMethodRaw.includes("sepa") ? "sepa" : "transfer";
-    const contractStart = parseCsvDate(getCell(row, ["Startdatum", "Vertragsbeginn"]));
-    const contractEnd = parseCsvDate(getCell(row, ["Enddatum", "Vertragsende"]));
-    const amount = parseGermanNumber(getCell(row, ["Betrag (€)", "Betrag", "Gesamtbetrag"]));
-    const notes = getCell(row, ["Notizen", "Notiz"]).trim() || null;
+    const contractStart = parseCsvDate(
+      getCell(row, ["Startdatum", "Vertragsbeginn", "Start", "Beginn"]),
+    );
+    const contractEnd = parseCsvDate(
+      getCell(row, ["Enddatum", "Vertragsende", "Ende", "Laufzeitende"]),
+    );
+    const amount = parseGermanNumber(
+      getCell(row, ["Betrag (€)", "Betrag", "Gesamtbetrag", "Preis", "Volumen"]),
+    );
+    const notes = getCell(row, ["Notizen", "Notiz", "Kommentar", "Bemerkung"]).trim() || null;
 
     if (!name || !paymentModel || !contractStart || !contractEnd || amount === null) {
       skipped += 1;
