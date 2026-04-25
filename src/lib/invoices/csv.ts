@@ -87,7 +87,11 @@ export function parseCsv(content: string): CsvParseResult {
 export function parseGermanNumber(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  const normalized = trimmed.replace(/\./g, "").replace(",", ".");
+  const normalized = trimmed
+    .replace(/[€$£]/g, "")
+    .replace(/\s/g, "")
+    .replace(/\.(?=\d{3}(?:\D|$))/g, "")
+    .replace(",", ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }

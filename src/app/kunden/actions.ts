@@ -84,6 +84,10 @@ function normalizeColumnName(value: string): string {
     .replace(/\s+/g, " ");
 }
 
+function normalizeValue(value: string): string {
+  return normalizeColumnName(value).replace(/\./g, "");
+}
+
 function getCell(row: Record<string, string>, aliases: string[]): string {
   for (const [key, raw] of Object.entries(row)) {
     const normalized = normalizeColumnName(key);
@@ -343,38 +347,44 @@ export async function importCustomersFromCsv(
   }
   const rows = parsedCsv.rows;
 
-  const statusMap: Record<string, "active" | "completed" | "planned"> = {
-    "In Betreuung": "active",
-    Abgeschlossen: "completed",
-    Geplant: "planned",
-  };
-  const modelMap: Record<string, "retainer" | "installment" | "one_time"> = {
-    Retainer: "retainer",
-    Teilzahlung: "installment",
-    Einmalzahlung: "one_time",
-  };
-  const dayMap: Record<string, number> = {
-    "01.": 1,
-    "1.": 1,
-    "15.": 15,
-    "30.": 30,
-  };
-  const methodMap: Record<string, "sepa" | "transfer"> = {
-    SEPA: "sepa",
-    Überweisung: "transfer",
-    Ueberweisung: "transfer",
-  };
-
   let imported = 0;
   let skipped = 0;
 
   for (const row of rows) {
     const name = getCell(row, ["Kunde", "Kundenname", "Name"]).trim();
-    const status = statusMap[getCell(row, ["Status"]).trim()] ?? "active";
-    const paymentModel = modelMap[getCell(row, ["Zahlungsmodell", "Modell"]).trim()];
-    const paymentDay = dayMap[getCell(row, ["Zahlungstag", "Tag"]).trim()] ?? 1;
-    const paymentMethod =
-      methodMap[getCell(row, ["Zahlungsart", "Zahlungsweise"]).trim()] ?? "transfer";
+    const statusRaw = normalizeValue(getCell(row, ["Status"]));
+    const paymentModelRaw = normalizeValue(getCell(row, ["Zahlungsmodell", "Modell"]));
+    const paymentDayRaw = normalizeValue(getCell(row, ["Zahlungstag", "Tag"]));
+    const paymentMethodRaw = normalizeValue(getCell(row, ["Zahlungsart", "Zahlungsweise"]));
+
+    const status: "active" | "completed" | "planned" =
+      statusRaw.includes("abgeschlossen")
+        ? "completed"
+        : statusRaw.includes("geplant")
+          ? "planned"
+          : "active";
+
+    const paymentModel: "retainer" | "installment" | "one_time" | undefined =
+      paymentModelRaw.includes("retainer")
+        ? "retainer"
+        : paymentModelRaw.includes("teilzahlung") ||
+            paymentModelRaw.includes("raten") ||
+            paymentModelRaw.includes("installment")
+          ? "installment"
+          : paymentModelRaw.includes("einmal")
+            ? "one_time"
+            : undefined;
+
+    const paymentDay = paymentDayRaw.includes("15")
+      ? 15
+      : paymentDayRaw.includes("30")
+        ? 30
+        : paymentDayRaw.includes("1")
+          ? 1
+          : 1;
+
+    const paymentMethod: "sepa" | "transfer" =
+      paymentMethodRaw.includes("sepa") ? "sepa" : "transfer";
     const contractStart = parseCsvDate(getCell(row, ["Startdatum", "Vertragsbeginn"]));
     const contractEnd = parseCsvDate(getCell(row, ["Enddatum", "Vertragsende"]));
     const amount = parseGermanNumber(getCell(row, ["Betrag (€)", "Betrag", "Gesamtbetrag"]));
