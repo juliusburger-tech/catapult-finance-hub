@@ -11,6 +11,8 @@ const navItems = [
   { href: "/monatsueberblick", label: "Monatsüberblick" },
   { href: "/bwa", label: "BWA-Archiv" },
   { href: "/steuern", label: "Steuern" },
+  { href: "/rechnungen", label: "Rechnungen" },
+  { href: "/kunden", label: "Kunden" },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -25,7 +27,7 @@ export function AppSidebar() {
 
   return (
     <aside
-      className="flex h-screen w-[220px] shrink-0 flex-col border-r bg-[var(--color-surface)]"
+      className="flex min-h-screen w-[220px] shrink-0 self-stretch flex-col border-r bg-[var(--color-surface)]"
       style={{ borderColor: "var(--color-border-token)" }}
     >
       <div className="flex h-14 items-center px-5">

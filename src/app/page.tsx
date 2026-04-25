@@ -8,9 +8,10 @@ import { TaxPreviewCard } from "@/components/dashboard/tax-preview-card";
 import { Button } from "@/components/ui/button";
 import { formatBwaPeriod } from "@/lib/bwa/months";
 import { getDashboardData } from "@/lib/dashboard/get-dashboard-data";
-import { formatEuro } from "@/lib/format";
+import { formatEuro, formatPercent } from "@/lib/format";
+import { getInvoiceDashboardPreview } from "@/lib/invoices/get-invoice-preview";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 type DashboardPageProps = {
   searchParams: Promise<{ year?: string }>;
@@ -38,6 +39,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const rhythmMonth = today.getMonth() + 1;
   const rhythmHref = `/monatsueberblick?year=${rhythmYear}&month=${rhythmMonth}`;
   const rhythmLabel = formatBwaPeriod(rhythmMonth, rhythmYear);
+  const invoicePreview = await getInvoiceDashboardPreview(rhythmMonth, rhythmYear);
+  const invoiceHref = `/rechnungen?year=${rhythmYear}&month=${rhythmMonth}`;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-10">
@@ -79,7 +82,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </Button>
       </aside>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard
           label="Umsatz YTD"
           value={formatEuro(data.revenueYtd)}
@@ -98,6 +101,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ? `Umsatz YTD ÷ ${data.monthsWithData} Monat(e) mit BWA`
               : "Noch keine BWAs für dieses Jahr"
           }
+        />
+        <KpiCard
+          label="Gewinnmarge YTD"
+          value={data.profitMarginYtd === null ? "—" : formatPercent(data.profitMarginYtd)}
+          hint="Gewinn YTD ÷ Umsatz YTD"
         />
         <KpiCard
           label="Letzte BWA"
@@ -138,6 +146,60 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </section>
 
       <TaxPreviewCard tax={data.tax} dashboardYear={data.year} />
+
+      <section
+        className="rounded-[var(--radius-container-token)] border bg-[var(--color-surface)] p-6"
+        style={{
+          borderColor: "var(--color-border-token)",
+          boxShadow: "var(--shadow-card-token)",
+        }}
+      >
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-semibold tracking-wide text-[var(--color-primary)]">
+              <span className="text-[var(--color-text-subtle)]">— </span>
+              Rechnungen
+              <span className="text-[var(--color-text-subtle)]"> —</span>
+            </p>
+            <h2 className="text-xl font-extrabold tracking-tight text-[var(--color-text)]">
+              Rechnungs-Cockpit {rhythmLabel}
+            </h2>
+          </div>
+          <Button asChild variant="outline" size="default">
+            <Link href={invoiceHref}>Zum Cockpit</Link>
+          </Button>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MiniKpi
+            label="Gestellt"
+            value={`${invoicePreview.invoicesSentCount} / ${invoicePreview.totalEntries}`}
+          />
+          <MiniKpi
+            label="Bezahlt"
+            value={`${invoicePreview.paidCount} / ${invoicePreview.totalEntries}`}
+          />
+          <MiniKpi label="Soll" value={formatEuro(invoicePreview.plannedRevenue)} />
+          <MiniKpi label="Ist" value={formatEuro(invoicePreview.actualRevenue)} />
+        </div>
+
+        {invoicePreview.overdueOpenInvoices > 0 ? (
+          <p className="mt-4 text-sm font-medium text-amber-700">
+            {invoicePreview.overdueOpenInvoices} überfällige Rechnungen sind noch nicht gestellt.
+          </p>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function MiniKpi({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[var(--radius-card-token)] border border-[var(--color-border-token)] bg-[var(--color-surface-raised)] p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-subtle)]">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-extrabold text-[var(--color-text)]">{value}</p>
     </div>
   );
 }
