@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Upload } from "lucide-react";
 
 import { deleteCustomer, updateCustomer } from "@/app/kunden/actions";
 import {
@@ -64,10 +65,17 @@ type Tab = "plan" | "master" | "docs";
 
 export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [tab, setTab] = useState<Tab>("plan");
   const [pendingDelete, startDeleteTransition] = useTransition();
   const [pendingUpdate, startUpdateTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadPending, setUploadPending] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [draftFormData, setDraftFormData] = useState<FormData | null>(null);
 
@@ -164,6 +172,77 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
       router.push("/kunden");
       router.refresh();
     });
+  }
+
+  async function handleContractUpload() {
+    if (!selectedFile) {
+      setUploadError("Bitte zuerst eine PDF-Datei auswählen.");
+      return;
+    }
+
+    setUploadPending(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+    try {
+      const formData = new FormData();
+      formData.append("customerId", customer.id);
+      formData.append("file", selectedFile);
+
+      const response = await fetch("/api/contracts/upload", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+        },
+        body: formData,
+      });
+
+      const payload = (await response.json()) as
+        | { ok: true; contractFile: string }
+        | { ok: false; error?: string };
+
+      if (!response.ok || !payload.ok) {
+        setUploadError(payload.ok ? "Upload fehlgeschlagen. Bitte erneut versuchen." : payload.error ?? "Upload fehlgeschlagen. Bitte erneut versuchen.");
+        return;
+      }
+
+      setUploadSuccess("Angebot erfolgreich hochgeladen.");
+      setSelectedFileName(null);
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      router.refresh();
+    } catch (uploadErr) {
+      console.error(uploadErr);
+      setUploadError("Upload fehlgeschlagen. Bitte erneut versuchen.");
+    } finally {
+      setUploadPending(false);
+    }
+  }
+
+  function handleSelectedFile(file: File | null) {
+    setUploadError(null);
+    setUploadSuccess(null);
+
+    if (!file) {
+      setSelectedFileName(null);
+      setSelectedFile(null);
+      return;
+    }
+
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setUploadError("Bitte nur PDF-Dateien hochladen.");
+      setSelectedFileName(null);
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
+
+    setSelectedFileName(file.name);
+    setSelectedFile(file);
   }
 
   return (
@@ -465,24 +544,89 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
               Noch kein Angebot hochgeladen.
             </p>
           )}
-          <form
-            action="/api/contracts/upload"
-            method="post"
-            encType="multipart/form-data"
-            className="flex flex-col gap-3"
-          >
-            <input type="hidden" name="customerId" value={customer.id} />
+          <div className="flex flex-col gap-3">
             <input
+              ref={fileInputRef}
               name="file"
               type="file"
-              accept="application/pdf"
-              required
-              className="text-sm text-[var(--color-text)]"
+              accept="application/pdf,.pdf"
+              className="sr-only"
+              onChange={(e) => {
+                handleSelectedFile(e.target.files?.[0] ?? null);
+              }}
             />
-            <Button type="submit" variant="outline">
-              PDF hochladen
+            <div
+              className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-card-token)] border-2 border-dashed px-4 py-6 transition-colors ${
+                dragActive
+                  ? "border-[var(--color-primary)] bg-[var(--color-surface-raised)]"
+                  : "border-[var(--color-border-token)] bg-[var(--color-surface-raised)] hover:border-[var(--color-primary)]/50"
+              }`}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setDragActive(true);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragActive(true);
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragActive(false);
+                handleSelectedFile(e.dataTransfer.files?.[0] ?? null);
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label="PDF per Drag and Drop ablegen oder auswählen"
+            >
+              <Upload className="size-8 text-[var(--color-primary)]" strokeWidth={1.5} />
+              <p className="text-center text-sm font-medium text-[var(--color-text)]">
+                PDF hierher ziehen oder Bereich anklicken
+              </p>
+              <p className="text-center text-xs text-[var(--color-text-muted)]">
+                {selectedFileName ?? "Noch keine Datei ausgewählt"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="contract-file-input-fallback"
+                className="text-xs font-medium text-[var(--color-text-muted)]"
+              >
+                Fallback:
+              </label>
+              <input
+                id="contract-file-input-fallback"
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={(e) => {
+                  const next = e.target.files?.[0] ?? null;
+                  handleSelectedFile(next);
+                }}
+                className="text-xs text-[var(--color-text-muted)]"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="default"
+              onClick={handleContractUpload}
+              disabled={uploadPending || !selectedFileName}
+            >
+              {uploadPending ? "Lädt hoch..." : "PDF hochladen"}
             </Button>
-          </form>
+            {uploadError ? (
+              <p className="text-sm text-[var(--color-error)]">{uploadError}</p>
+            ) : null}
+            {uploadSuccess ? (
+              <p className="text-sm text-emerald-700">{uploadSuccess}</p>
+            ) : null}
+          </div>
         </section>
       ) : null}
 
