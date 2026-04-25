@@ -49,6 +49,12 @@ export function CustomerImportDialog() {
         setError(result.error);
         return;
       }
+      if (result.imported === 0) {
+        setError(
+          `Kein Datensatz importiert. ${result.skipped} Zeilen wurden übersprungen. Bitte prüfe Spaltennamen und Datums-/Betragsformate.`,
+        );
+        return;
+      }
       setSuccess(`Import abgeschlossen: ${result.imported} importiert, ${result.skipped} übersprungen.`);
       router.refresh();
     });
@@ -73,7 +79,7 @@ export function CustomerImportDialog() {
           Aus Excel importieren
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto border-[var(--color-border-token)] bg-[var(--color-surface)]">
+      <DialogContent className="h-[90vh] max-h-[90vh] max-w-6xl overflow-y-auto border-[var(--color-border-token)] bg-[var(--color-surface)] sm:max-w-[95vw]">
         <DialogHeader>
           <DialogTitle className="text-[var(--color-text)]">Kunden aus CSV importieren</DialogTitle>
         </DialogHeader>

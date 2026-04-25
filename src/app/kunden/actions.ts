@@ -32,8 +32,23 @@ function parseCsvDate(value: string): Date | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
-  const direct = new Date(trimmed);
-  if (!Number.isNaN(direct.getTime())) return direct;
+  const ymdMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (ymdMatch) {
+    const year = Number(ymdMatch[1]);
+    const month = Number(ymdMatch[2]);
+    const day = Number(ymdMatch[3]);
+    const date = new Date(year, month - 1, day);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  const dmySlashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmySlashMatch) {
+    const day = Number(dmySlashMatch[1]);
+    const month = Number(dmySlashMatch[2]);
+    const year = Number(dmySlashMatch[3]);
+    const date = new Date(year, month - 1, day);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
 
   const dotParts = trimmed.split(".");
   if (dotParts.length === 3) {
@@ -55,6 +70,28 @@ function parseCsvDate(value: string): Date | null {
   }
 
   return null;
+}
+
+function normalizeColumnName(value: string): string {
+  return value
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replaceAll("ä", "ae")
+    .replaceAll("ö", "oe")
+    .replaceAll("ü", "ue")
+    .replaceAll("ß", "ss")
+    .replace(/\s+/g, " ");
+}
+
+function getCell(row: Record<string, string>, aliases: string[]): string {
+  for (const [key, raw] of Object.entries(row)) {
+    const normalized = normalizeColumnName(key);
+    if (aliases.some((alias) => normalizeColumnName(alias) === normalized)) {
+      return raw ?? "";
+    }
+  }
+  return "";
 }
 
 export async function createCustomer(formData: FormData): Promise<CustomerActionResult> {
@@ -332,15 +369,16 @@ export async function importCustomersFromCsv(
   let skipped = 0;
 
   for (const row of rows) {
-    const name = row["Kunde"]?.trim() ?? "";
-    const status = statusMap[row["Status"] ?? ""] ?? "active";
-    const paymentModel = modelMap[row["Zahlungsmodell"] ?? ""];
-    const paymentDay = dayMap[row["Zahlungstag"] ?? ""] ?? 1;
-    const paymentMethod = methodMap[row["Zahlungsart"] ?? ""] ?? "transfer";
-    const contractStart = parseCsvDate(row["Startdatum"] ?? "");
-    const contractEnd = parseCsvDate(row["Enddatum"] ?? "");
-    const amount = parseGermanNumber(row["Betrag (€)"] ?? "");
-    const notes = row["Notizen"]?.trim() || null;
+    const name = getCell(row, ["Kunde", "Kundenname", "Name"]).trim();
+    const status = statusMap[getCell(row, ["Status"]).trim()] ?? "active";
+    const paymentModel = modelMap[getCell(row, ["Zahlungsmodell", "Modell"]).trim()];
+    const paymentDay = dayMap[getCell(row, ["Zahlungstag", "Tag"]).trim()] ?? 1;
+    const paymentMethod =
+      methodMap[getCell(row, ["Zahlungsart", "Zahlungsweise"]).trim()] ?? "transfer";
+    const contractStart = parseCsvDate(getCell(row, ["Startdatum", "Vertragsbeginn"]));
+    const contractEnd = parseCsvDate(getCell(row, ["Enddatum", "Vertragsende"]));
+    const amount = parseGermanNumber(getCell(row, ["Betrag (€)", "Betrag", "Gesamtbetrag"]));
+    const notes = getCell(row, ["Notizen", "Notiz"]).trim() || null;
 
     if (!name || !paymentModel || !contractStart || !contractEnd || amount === null) {
       skipped += 1;
@@ -405,6 +443,14 @@ export async function importCustomersFromCsv(
       console.error(error);
       skipped += 1;
     }
+  }
+
+  if (imported === 0 && skipped > 0) {
+    return {
+      ok: false,
+      error:
+        "Keine Zeile konnte importiert werden. Bitte prüfe, ob die Spaltenüberschriften zum Mapping passen (z. B. Kunde, Zahlungsmodell, Zahlungstag, Startdatum, Enddatum, Betrag (€)).",
+    };
   }
 
   revalidatePath("/kunden");

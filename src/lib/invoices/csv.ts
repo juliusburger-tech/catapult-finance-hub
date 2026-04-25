@@ -3,18 +3,24 @@ export type CsvParseResult = {
   rows: Array<Record<string, string>>;
 };
 
-function detectDelimiter(line: string): "," | ";" {
-  return line.includes(";") ? ";" : ",";
+function stripBom(value: string): string {
+  return value.replace(/^\uFEFF/, "");
 }
 
-function splitCsvLine(line: string, delimiter: "," | ";"): string[] {
-  const cells: string[] = [];
+function detectDelimiter(line: string): "," | ";" {
+  const normalized = stripBom(line);
+  return normalized.includes(";") ? ";" : ",";
+}
+
+function parseCsvCells(content: string, delimiter: "," | ";"): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
   let current = "";
   let inQuotes = false;
 
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    const next = line[i + 1];
+  for (let i = 0; i < content.length; i += 1) {
+    const char = content[i];
+    const next = content[i + 1];
 
     if (char === '"') {
       if (inQuotes && next === '"') {
@@ -26,30 +32,48 @@ function splitCsvLine(line: string, delimiter: "," | ";"): string[] {
       continue;
     }
 
-    if (char === delimiter && !inQuotes) {
-      cells.push(current.trim());
+    if (!inQuotes && char === delimiter) {
+      row.push(current.trim());
       current = "";
+      continue;
+    }
+
+    if (!inQuotes && (char === "\n" || char === "\r")) {
+      if (char === "\r" && next === "\n") {
+        i += 1;
+      }
+      row.push(current.trim());
+      current = "";
+      if (row.some((cell) => cell !== "")) {
+        rows.push(row);
+      }
+      row = [];
       continue;
     }
 
     current += char;
   }
 
-  cells.push(current.trim());
-  return cells;
+  if (current !== "" || row.length > 0) {
+    row.push(current.trim());
+    if (row.some((cell) => cell !== "")) {
+      rows.push(row);
+    }
+  }
+
+  return rows;
 }
 
 export function parseCsv(content: string): CsvParseResult {
-  const lines = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (lines.length === 0) return { headers: [], rows: [] };
+  if (!content.trim()) return { headers: [], rows: [] };
 
-  const delimiter = detectDelimiter(lines[0]);
-  const headers = splitCsvLine(lines[0], delimiter);
-  const rows = lines.slice(1).map((line) => {
-    const cells = splitCsvLine(line, delimiter);
+  const firstLine = content.split(/\r?\n/, 1)[0] ?? "";
+  const delimiter = detectDelimiter(firstLine);
+  const parsedRows = parseCsvCells(content, delimiter);
+  if (parsedRows.length === 0) return { headers: [], rows: [] };
+
+  const headers = parsedRows[0].map((header) => stripBom(header).trim());
+  const rows = parsedRows.slice(1).map((cells) => {
     const row: Record<string, string> = {};
     headers.forEach((header, index) => {
       row[header] = cells[index] ?? "";
