@@ -55,11 +55,9 @@ export async function POST(request: Request) {
       throw uploadError;
     }
 
-    const publicUrl = supabase.storage.from(bucket).getPublicUrl(objectPath).data.publicUrl;
-
     await prisma.customer.update({
       where: { id: customerId },
-      data: { contractFile: publicUrl || objectPath },
+      data: { contractFile: objectPath },
     });
 
     revalidatePath("/kunden");
@@ -67,7 +65,7 @@ export async function POST(request: Request) {
 
     if (wantsJson) {
       return NextResponse.json(
-        { ok: true, contractFile: publicUrl || objectPath },
+        { ok: true, contractFile: objectPath },
         { status: 200 },
       );
     }

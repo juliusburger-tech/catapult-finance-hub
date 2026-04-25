@@ -96,12 +96,7 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
   };
 
   const [masterState, setMasterState] = useState(initialMasterState);
-  const contractHref =
-    customer.contractFile && customer.contractFile.startsWith("http")
-      ? customer.contractFile
-      : customer.contractFile
-        ? `/${customer.contractFile}`
-        : null;
+  const contractHref = customer.contractFile ? `/api/contracts/${customer.id}` : null;
 
   const totals = useMemo(() => {
     const total = entries.reduce((sum, entry) => sum + entry.amount, 0);
@@ -556,12 +551,28 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
         >
           <h2 className="mb-3 text-xl font-extrabold text-[var(--color-text)]">Dokumente</h2>
           {customer.contractFile ? (
-            <p className="mb-4 text-sm text-[var(--color-text-muted)]">
-              Hochgeladenes Angebot:{" "}
-              <Link href={contractHref ?? "#"} target="_blank" className="font-semibold text-[var(--color-primary)] underline">
-                PDF öffnen
-              </Link>
-            </p>
+            <div className="mb-4 flex flex-col gap-3">
+              <p className="text-sm text-[var(--color-text-muted)]">
+                Hochgeladenes Angebot wird direkt angezeigt.
+              </p>
+              <div className="h-[520px] w-full overflow-hidden rounded-lg border border-[var(--color-border-token)] bg-[var(--color-surface-raised)]">
+                <iframe
+                  src={contractHref ?? undefined}
+                  title="Angebot PDF Vorschau"
+                  className="h-full w-full"
+                />
+              </div>
+              <p className="text-xs text-[var(--color-text-subtle)]">
+                Falls die Vorschau nicht lädt:{" "}
+                <Link
+                  href={contractHref ?? "#"}
+                  target="_blank"
+                  className="font-semibold text-[var(--color-primary)] underline"
+                >
+                  PDF in neuem Tab öffnen
+                </Link>
+              </p>
+            </div>
           ) : (
             <p className="mb-4 text-sm text-[var(--color-text-muted)]">
               Noch kein Angebot hochgeladen.
