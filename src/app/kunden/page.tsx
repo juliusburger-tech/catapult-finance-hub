@@ -58,6 +58,10 @@ export default async function KundenPage() {
         <p className="max-w-2xl text-base text-[var(--color-text-muted)]">
           Alle Kunden, Verträge und Zahlungsmodelle.
         </p>
+        <p className="text-sm font-medium text-[var(--color-text-muted)]">
+          Gesamtanzahl Kunden:{" "}
+          <span className="font-extrabold text-[var(--color-text)]">{rows.length}</span>
+        </p>
       </header>
 
       <CustomersOverview customers={rows} />
