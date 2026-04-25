@@ -96,6 +96,12 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
   };
 
   const [masterState, setMasterState] = useState(initialMasterState);
+  const contractHref =
+    customer.contractFile && customer.contractFile.startsWith("http")
+      ? customer.contractFile
+      : customer.contractFile
+        ? `/${customer.contractFile}`
+        : null;
 
   const totals = useMemo(() => {
     const total = entries.reduce((sum, entry) => sum + entry.amount, 0);
@@ -196,12 +202,27 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
         body: formData,
       });
 
-      const payload = (await response.json()) as
+      const rawBody = await response.text();
+      let payload:
         | { ok: true; contractFile: string }
-        | { ok: false; error?: string };
+        | { ok: false; error?: string }
+        | null = null;
+      try {
+        payload = JSON.parse(rawBody) as
+          | { ok: true; contractFile: string }
+          | { ok: false; error?: string };
+      } catch {
+        payload = null;
+      }
 
-      if (!response.ok || !payload.ok) {
-        setUploadError(payload.ok ? "Upload fehlgeschlagen. Bitte erneut versuchen." : payload.error ?? "Upload fehlgeschlagen. Bitte erneut versuchen.");
+      if (!response.ok || !payload || !payload.ok) {
+        const detail =
+          payload && !payload.ok
+            ? payload.error
+            : rawBody
+              ? `HTTP ${response.status}: ${rawBody.slice(0, 180)}`
+              : `HTTP ${response.status}`;
+        setUploadError(`Upload-Fehlerdetail: ${detail ?? "Unbekannt"}`);
         return;
       }
 
@@ -214,7 +235,9 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
       router.refresh();
     } catch (uploadErr) {
       console.error(uploadErr);
-      setUploadError("Upload fehlgeschlagen. Bitte erneut versuchen.");
+      const detail =
+        uploadErr instanceof Error ? uploadErr.message : "Unbekannter Client-Fehler";
+      setUploadError(`Upload-Fehlerdetail: ${detail}`);
     } finally {
       setUploadPending(false);
     }
@@ -535,7 +558,7 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
           {customer.contractFile ? (
             <p className="mb-4 text-sm text-[var(--color-text-muted)]">
               Hochgeladenes Angebot:{" "}
-              <Link href={`/${customer.contractFile}`} target="_blank" className="font-semibold text-[var(--color-primary)] underline">
+              <Link href={contractHref ?? "#"} target="_blank" className="font-semibold text-[var(--color-primary)] underline">
                 PDF öffnen
               </Link>
             </p>
