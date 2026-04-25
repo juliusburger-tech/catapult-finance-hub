@@ -97,6 +97,8 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
   const actualRevenue = entries
     .filter((entry) => entry.paid)
     .reduce((sum, entry) => sum + entry.amount, 0);
+  const retainerEntries = entries.filter((entry) => entry.entryType === "retainer");
+  const retainerCashflow = retainerEntries.reduce((sum, entry) => sum + entry.amount, 0);
 
   const dueNotSentCount =
     isCurrentMonth && totalEntries > 0
@@ -163,13 +165,18 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
         <KpiCard label="Rechnungen gestellt" value={`${invoicesSentCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Rechnungen ausstehend" value={`${invoicePendingCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Bezahlt" value={`${paidCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Offen (unbezahlt)" value={`${unpaidCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Soll-Umsatz" value={formatEuro(plannedRevenue)} />
         <KpiCard label="Ist-Umsatz" value={formatEuro(actualRevenue)} />
+        <KpiCard
+          label="Monatlicher Retainer-Cashflow"
+          value={formatEuro(retainerCashflow)}
+          hint={`${retainerEntries.length} Retainer-Posten`}
+        />
       </section>
 
       {dueNotSentCount > 0 ? (
