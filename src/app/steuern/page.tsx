@@ -8,7 +8,7 @@ import { TaxYearResetButton } from "@/components/tax/tax-year-reset-button";
 import { DashboardYearSelect } from "@/components/dashboard/dashboard-year-select";
 import { getTaxPageData } from "@/lib/tax/get-tax-page-data";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 type SteuernPageProps = {
   searchParams: Promise<{ year?: string }>;

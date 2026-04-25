@@ -22,6 +22,7 @@ export type MonthlyOverviewData = {
   cumulative: {
     revenue: number;
     profit: number;
+    profitMargin: number | null;
     personnelCosts: number;
     operatingCosts: number;
     monthsWithDataInRange: number;
@@ -131,6 +132,7 @@ export async function getMonthlyOverviewData(
   });
   const paidYtd = paidAgg._sum.amount ?? 0;
   const openReserve = breakdown.totalRecommended - paidYtd;
+  const profitMargin = revenue > 0 ? profit / revenue : null;
 
   const monthStrip: MonthStripItem[] = Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
@@ -156,6 +158,7 @@ export async function getMonthlyOverviewData(
     cumulative: {
       revenue,
       profit,
+      profitMargin,
       personnelCosts,
       operatingCosts,
       monthsWithDataInRange,

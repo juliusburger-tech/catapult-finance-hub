@@ -1,4 +1,4 @@
-# Minimal CI: install → lint → build (no DB, no deploy).
+# Minimal CI: install → lint → build (no real DB; Prisma needs env vars).
 name: CI
 
 on:
@@ -11,7 +11,13 @@ jobs:
   check:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: "file:./prisma/finance.db"
+      # Dummy Postgres URLs — Prisma validates env at generate time; no server is contacted.
+      DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres?schema=public"
+      DIRECT_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres?schema=public"
+      SUPABASE_URL: "https://example.supabase.co"
+      SUPABASE_ANON_KEY: "sb_publishable_dummy"
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_dummy"
+      SUPABASE_STORAGE_BUCKET: "bwa"
     steps:
       - uses: actions/checkout@v4
 

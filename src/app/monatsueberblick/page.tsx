@@ -2,10 +2,10 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { formatBwaPeriod } from "@/lib/bwa/months";
-import { formatEuro } from "@/lib/format";
+import { formatEuro, formatPercent } from "@/lib/format";
 import { getMonthlyOverviewData } from "@/lib/monthly-overview/get-monthly-overview-data";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 type PageProps = {
   searchParams: Promise<{ year?: string; month?: string }>;
@@ -179,9 +179,17 @@ export default async function MonatsueberblickPage({ searchParams }: PageProps) 
             Monate ohne Eintrag zählen als 0.
           </p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <SummaryCard label="Umsatz (kumuliert)" value={formatEuro(data.cumulative.revenue)} />
           <SummaryCard label="Gewinn (kumuliert)" value={formatEuro(data.cumulative.profit)} />
+          <SummaryCard
+            label="Gewinnmarge (kumuliert)"
+            value={
+              data.cumulative.profitMargin === null
+                ? "—"
+                : formatPercent(data.cumulative.profitMargin)
+            }
+          />
           <SummaryCard
             label="Personalkosten (kumuliert)"
             value={formatEuro(data.cumulative.personnelCosts)}

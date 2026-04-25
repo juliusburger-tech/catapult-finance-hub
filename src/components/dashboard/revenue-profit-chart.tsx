@@ -24,7 +24,39 @@ export function RevenueProfitChart({ data, year }: RevenueProfitChartProps) {
     monat: row.label,
     umsatz: row.revenue,
     gewinn: row.profit,
+    marge: row.revenue > 0 ? row.profit / row.revenue : null,
   }));
+
+  function renderTooltip(props: any) {
+    const { active, payload, label } = props ?? {};
+    if (!active || !payload || payload.length === 0) return null;
+
+    const umsatz = payload.find((p: any) => p?.dataKey === "umsatz")?.value ?? 0;
+    const gewinn = payload.find((p: any) => p?.dataKey === "gewinn")?.value ?? 0;
+    const marge = payload[0]?.payload?.marge ?? null;
+
+    return (
+      <div
+        style={{
+          borderRadius: "var(--radius-card-token)",
+          border: "1px solid var(--color-border-token)",
+          background: "var(--color-surface)",
+          color: "var(--color-text)",
+          padding: "10px 12px",
+          boxShadow: "var(--shadow-card-token)",
+        }}
+      >
+        <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-muted)" }}>
+          {label} {year}
+        </p>
+        <p style={{ margin: "6px 0 0", fontSize: 13 }}>Umsatz: {formatEuro(Number(umsatz))}</p>
+        <p style={{ margin: "2px 0 0", fontSize: 13 }}>Gewinn: {formatEuro(Number(gewinn))}</p>
+        <p style={{ margin: "6px 0 0", fontSize: 13, fontWeight: 700 }}>
+          Marge: {marge === null ? "—" : `${(marge * 100).toFixed(1).replace(".", ",")} %`}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-[320px] w-full min-w-0">
@@ -47,17 +79,7 @@ export function RevenueProfitChart({ data, year }: RevenueProfitChartProps) {
             width={72}
           />
           <Tooltip
-            formatter={(value, name) => [
-              formatEuro(Number(value ?? 0)),
-              name === "umsatz" ? "Umsatz" : "Gewinn",
-            ]}
-            labelFormatter={(label) => `${label} ${year}`}
-            contentStyle={{
-              borderRadius: "var(--radius-card-token)",
-              borderColor: "var(--color-border-token)",
-              background: "var(--color-surface)",
-              color: "var(--color-text)",
-            }}
+            content={renderTooltip}
           />
           <Legend
             formatter={(value) => (value === "umsatz" ? "Umsatz" : "Gewinn")}

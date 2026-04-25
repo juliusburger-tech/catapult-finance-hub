@@ -1,8 +1,12 @@
 import { BwaEntriesTable } from "@/components/bwa/bwa-entries-table";
 import { BwaUploadPanel } from "@/components/bwa/bwa-upload-panel";
 import { prisma } from "@/lib/prisma";
+import {
+  createSupabaseServerClient,
+  getBwaBucketName,
+} from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 type BwaPageProps = {
   searchParams: Promise<{ year?: string; month?: string }>;
@@ -30,6 +34,43 @@ export default async function BwaArchivePage({ searchParams }: BwaPageProps) {
   const entries = await prisma.bwaEntry.findMany({
     orderBy: { uploadedAt: "desc" },
   });
+  const supabase = createSupabaseServerClient();
+  const bucket = getBwaBucketName();
+
+  const entriesWithLinks = await Promise.all(
+    entries.map(async (entry) => {
+      if (entry.filePath.startsWith("/")) {
+        return {
+          ...entry,
+          openUrl: entry.filePath,
+          downloadUrl: entry.filePath,
+        };
+      }
+
+      const [{ data: openData, error: openError }, { data: downloadData, error: downloadError }] =
+        await Promise.all([
+          supabase.storage.from(bucket).createSignedUrl(entry.filePath, 60 * 10),
+          supabase.storage
+            .from(bucket)
+            .createSignedUrl(entry.filePath, 60 * 10, { download: entry.filename }),
+        ]);
+
+      if (openError || downloadError || !openData?.signedUrl || !downloadData?.signedUrl) {
+        console.error(openError || downloadError || "Missing signed URL");
+        return {
+          ...entry,
+          openUrl: "#",
+          downloadUrl: "#",
+        };
+      }
+
+      return {
+        ...entry,
+        openUrl: openData.signedUrl,
+        downloadUrl: downloadData.signedUrl,
+      };
+    }),
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-10">
@@ -61,7 +102,7 @@ export default async function BwaArchivePage({ searchParams }: BwaPageProps) {
             Alle BWAs
           </h2>
         </div>
-        <BwaEntriesTable entries={entries} />
+        <BwaEntriesTable entries={entriesWithLinks} />
       </section>
     </div>
   );

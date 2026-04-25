@@ -1,4 +1,3 @@
-import type { BwaEntry } from "@prisma/client";
 import { ExternalLink, Download } from "lucide-react";
 
 import { formatBwaPeriod } from "@/lib/bwa/months";
@@ -14,7 +13,15 @@ import {
 } from "@/components/ui/table";
 
 type BwaEntriesTableProps = {
-  entries: BwaEntry[];
+  entries: Array<{
+    id: string;
+    month: number;
+    year: number;
+    uploadedAt: Date;
+    filename: string;
+    openUrl: string;
+    downloadUrl: string;
+  }>;
 };
 
 export function BwaEntriesTable({ entries }: BwaEntriesTableProps) {
@@ -70,7 +77,7 @@ export function BwaEntriesTable({ entries }: BwaEntriesTableProps) {
                   <div className="flex items-center justify-end gap-1">
                     <Button variant="ghost" size="icon-sm" asChild>
                       <a
-                        href={entry.filePath}
+                        href={entry.openUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label={`PDF ${period} in neuem Tab öffnen`}
@@ -80,7 +87,7 @@ export function BwaEntriesTable({ entries }: BwaEntriesTableProps) {
                     </Button>
                     <Button variant="ghost" size="icon-sm" asChild>
                       <a
-                        href={entry.filePath}
+                        href={entry.downloadUrl}
                         download={entry.filename}
                         aria-label={`PDF ${period} herunterladen`}
                       >

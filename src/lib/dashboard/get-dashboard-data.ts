@@ -31,6 +31,7 @@ export type DashboardData = {
   yearOptions: number[];
   revenueYtd: number;
   profitYtd: number;
+  profitMarginYtd: number | null;
   monthsWithData: number;
   avgMonthlyRevenue: number;
   lastBwaLabel: string;
@@ -83,6 +84,7 @@ export async function getDashboardData(year: number): Promise<DashboardData> {
   const monthsWithData = entries.length;
   const avgMonthlyRevenue =
     monthsWithData > 0 ? revenueYtd / monthsWithData : 0;
+  const profitMarginYtd = revenueYtd > 0 ? profitYtd / revenueYtd : null;
 
   const lastBwaLabel = lastUploaded
     ? formatBwaPeriod(lastUploaded.month, lastUploaded.year)
@@ -130,6 +132,7 @@ export async function getDashboardData(year: number): Promise<DashboardData> {
     yearOptions,
     revenueYtd,
     profitYtd,
+    profitMarginYtd,
     monthsWithData,
     avgMonthlyRevenue,
     lastBwaLabel,

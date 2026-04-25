@@ -17,8 +17,9 @@ export default function SettingsPage() {
   const version = readAppVersion();
 
   const paths = [
-    { label: "SQLite-Datenbank", value: path.join("prisma", "finance.db") },
-    { label: "BWA-Uploads (PDF)", value: path.join("public", "uploads", "bwa") },
+    { label: "Datenbank", value: "Supabase Postgres (DATABASE_URL)" },
+    { label: "BWA-Uploads (PDF)", value: "Supabase Storage Bucket `bwa`" },
+    { label: "Projekt-URL", value: "SUPABASE_URL (aus .env.local)" },
   ];
 
   return (
@@ -99,10 +100,8 @@ export default function SettingsPage() {
       </section>
 
       <p className="text-xs leading-relaxed text-[var(--color-text-subtle)]">
-        Backups: Datenbank-Datei und Ordner{" "}
-        <code className="text-[var(--color-text-muted)]">public/uploads/bwa</code>{" "}
-        bei Bedarf manuell sichern. Steuer- und Finanzwerte im Tool sind Schätzungen
-        und ersetzen keine Beratung.
+        Backups und Verfügbarkeit laufen über Supabase (Datenbank + Storage).
+        Steuer- und Finanzwerte im Tool sind Schätzungen und ersetzen keine Beratung.
       </p>
     </div>
   );

@@ -1,14 +1,13 @@
 "use server";
 
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
-
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "bwa");
+import {
+  createSupabaseServerClient,
+  getBwaBucketName,
+} from "@/lib/supabase/server";
 
 export type BwaActionResult =
   | { ok: true }
@@ -85,22 +84,32 @@ export async function createBwa(formData: FormData): Promise<BwaActionResult> {
     typeof notesRaw === "string" && notesRaw.trim() !== "" ? notesRaw.trim() : undefined;
 
   const originalName = file.name.replace(/[/\\]/g, "_").slice(0, 200);
-  const safeBase = `${year}-${String(month).padStart(2, "0")}-${crypto.randomUUID()}.pdf`;
-  const diskPath = path.join(UPLOAD_DIR, safeBase);
-  const publicPath = `/uploads/bwa/${safeBase}`;
+  const safeBase = `${year}-${String(month).padStart(2, "0")}-${crypto.randomUUID()}-${originalName}`;
+  const objectPath = `${year}/${safeBase}`;
+  const supabase = createSupabaseServerClient();
+  const bucket = getBwaBucketName();
 
   const bytes = Buffer.from(await file.arrayBuffer());
+  let uploaded = false;
 
   try {
-    await mkdir(UPLOAD_DIR, { recursive: true });
-    await writeFile(diskPath, bytes);
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(objectPath, bytes, {
+        upsert: false,
+        contentType: "application/pdf",
+      });
+    if (uploadError) {
+      throw uploadError;
+    }
+    uploaded = true;
 
     await prisma.bwaEntry.create({
       data: {
         month,
         year,
         filename: originalName,
-        filePath: publicPath,
+        filePath: objectPath,
         revenue,
         personnelCosts,
         operatingCosts,
@@ -110,10 +119,13 @@ export async function createBwa(formData: FormData): Promise<BwaActionResult> {
       },
     });
   } catch (error) {
-    try {
-      await unlink(diskPath);
-    } catch {
-      /* ignore */
+    if (uploaded) {
+      const { error: removeError } = await supabase.storage
+        .from(bucket)
+        .remove([objectPath]);
+      if (removeError) {
+        console.error(removeError);
+      }
     }
 
     if (
@@ -147,11 +159,8 @@ export async function deleteBwa(id: string): Promise<BwaActionResult> {
   if (!entry) {
     return { ok: false, error: "Eintrag wurde nicht gefunden." };
   }
-
-  const relative = entry.filePath.startsWith("/")
-    ? entry.filePath.slice(1)
-    : entry.filePath;
-  const diskPath = path.join(process.cwd(), "public", relative);
+  const supabase = createSupabaseServerClient();
+  const bucket = getBwaBucketName();
 
   try {
     await prisma.bwaEntry.delete({ where: { id } });
@@ -160,10 +169,13 @@ export async function deleteBwa(id: string): Promise<BwaActionResult> {
     return { ok: false, error: "Löschen in der Datenbank ist fehlgeschlagen." };
   }
 
-  try {
-    await unlink(diskPath);
-  } catch {
-    /* file may already be gone */
+  if (!entry.filePath.startsWith("/")) {
+    const { error: removeError } = await supabase.storage
+      .from(bucket)
+      .remove([entry.filePath]);
+    if (removeError) {
+      console.error(removeError);
+    }
   }
 
   revalidatePath("/bwa");
