@@ -45,6 +45,7 @@ type CustomerDetailProps = {
     id: string;
     name: string;
     status: "active" | "planned" | "completed";
+    closingDate: string | null;
     paymentModel: string;
     paymentMethod: string;
     paymentDay: number;
@@ -85,6 +86,7 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
     email: customer.email ?? "",
     phone: customer.phone ?? "",
     status: customer.status,
+    closingDate: customer.closingDate ?? "",
     contractStart: customer.contractStart,
     contractEnd: customer.contractEnd,
     paymentModel: customer.paymentModel,
@@ -435,6 +437,13 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
                 { value: "planned", label: "Geplant" },
                 { value: "completed", label: "Abgeschlossen" },
               ]}
+            />
+            <Field
+              label="Closing Date"
+              name="closingDate"
+              type="date"
+              value={masterState.closingDate}
+              onChange={(value) => setMasterState((s) => ({ ...s, closingDate: value }))}
             />
 
             <SelectField

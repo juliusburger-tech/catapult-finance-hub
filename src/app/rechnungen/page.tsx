@@ -85,11 +85,26 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
 
   const yearOptions = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i);
   const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
+  const monthStart = new Date(year, selectedMonth - 1, 1);
+  const monthEnd = new Date(year, selectedMonth, 1);
 
   const entries = await prisma.paymentScheduleEntry.findMany({
     where: { dueYear: year, dueMonth: selectedMonth },
     include: { customer: true },
     orderBy: [{ dueDay: "asc" }, { customer: { name: "asc" } }],
+  });
+  const closedDeals = await prisma.customer.findMany({
+    where: {
+      closingDate: {
+        gte: monthStart,
+        lt: monthEnd,
+      },
+    },
+    include: {
+      paymentEntries: {
+        select: { amount: true },
+      },
+    },
   });
 
   const totalEntries = entries.length;
@@ -103,6 +118,11 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
     .reduce((sum, entry) => sum + entry.amount, 0);
   const retainerEntries = entries.filter((entry) => entry.entryType === "retainer");
   const retainerCashflow = retainerEntries.reduce((sum, entry) => sum + entry.amount, 0);
+  const closedDealVolume = closedDeals.reduce(
+    (sum, customer) =>
+      sum + customer.paymentEntries.reduce((customerSum, entry) => customerSum + entry.amount, 0),
+    0,
+  );
 
   const dueNotSentCount =
     isCurrentMonth && totalEntries > 0
@@ -176,6 +196,11 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
         <KpiCard label="Offen (unbezahlt)" value={`${unpaidCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Soll-Umsatz" value={formatKpiEuro(plannedRevenue)} />
         <KpiCard label="Ist-Umsatz" value={formatKpiEuro(actualRevenue)} />
+        <KpiCard
+          label="Abgeschlossenes Dealvolumen (AV)"
+          value={formatKpiEuro(closedDealVolume)}
+          hint={`${closedDeals.length} Closings im Monat`}
+        />
         <KpiCard
           label="Monatlicher Retainer-Cashflow"
           value={formatKpiEuro(retainerCashflow)}

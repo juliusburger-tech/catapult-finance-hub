@@ -26,6 +26,7 @@ type FormState = {
   email: string;
   phone: string;
   status: "active" | "planned" | "completed";
+  closingDate: string;
   notes: string;
   contractStart: string;
   contractEnd: string;
@@ -52,6 +53,7 @@ const INITIAL_STATE: FormState = {
   email: "",
   phone: "",
   status: "active",
+  closingDate: "",
   notes: "",
   contractStart: "",
   contractEnd: "",
@@ -165,6 +167,12 @@ export function CustomerCreateDialog() {
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (step < 4) {
+      if (isStepValid(step)) {
+        nextStep();
+      }
+      return;
+    }
     setError(null);
     const formData = new FormData();
     formData.set("name", state.name);
@@ -172,6 +180,7 @@ export function CustomerCreateDialog() {
     formData.set("email", state.email);
     formData.set("phone", state.phone);
     formData.set("status", state.status);
+    formData.set("closingDate", state.closingDate);
     formData.set("notes", state.notes);
     formData.set("contractStart", state.contractStart);
     formData.set("contractEnd", state.contractEnd);
@@ -264,6 +273,14 @@ export function CustomerCreateDialog() {
                   <option value="planned">Geplant</option>
                   <option value="completed">Abgeschlossen</option>
                 </select>
+              </Field>
+              <Field label="Closing Date" htmlFor="customer-closing-date">
+                <Input
+                  id="customer-closing-date"
+                  type="date"
+                  value={state.closingDate}
+                  onChange={(e) => setState((s) => ({ ...s, closingDate: e.target.value }))}
+                />
               </Field>
               <Field label="Notizen" htmlFor="customer-notes">
                 <textarea

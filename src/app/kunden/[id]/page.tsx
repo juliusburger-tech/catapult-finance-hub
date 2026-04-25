@@ -46,6 +46,7 @@ export default async function KundenDetailPage({ params }: PageProps) {
           id: customer.id,
           name: customer.name,
           status: customer.status as "active" | "planned" | "completed",
+          closingDate: customer.closingDate ? formatDateInput(customer.closingDate) : null,
           paymentModel: customer.paymentModel,
           paymentMethod: customer.paymentMethod,
           paymentDay: customer.paymentDay,

@@ -122,6 +122,7 @@ export async function createCustomer(formData: FormData): Promise<CustomerAction
   const paymentDayRaw = parseNumber(formData.get("paymentDay"));
   const contractStart = parseDate(formData.get("contractStart"));
   const contractEnd = parseDate(formData.get("contractEnd"));
+  const closingDate = parseDate(formData.get("closingDate"));
 
   if (name === "") return { ok: false, error: "Kundenname ist erforderlich." };
   if (!["active", "planned", "completed"].includes(status)) {
@@ -174,6 +175,7 @@ export async function createCustomer(formData: FormData): Promise<CustomerAction
           paymentDay: paymentDayRaw,
           paymentMethod,
           paymentConfig,
+          closingDate,
           contractSigned,
           notes,
         },
@@ -239,6 +241,7 @@ export async function updateCustomer(
   const paymentDayRaw = parseNumber(formData.get("paymentDay"));
   const contractStart = parseDate(formData.get("contractStart"));
   const contractEnd = parseDate(formData.get("contractEnd"));
+  const closingDate = parseDate(formData.get("closingDate"));
 
   if (name === "") return { ok: false, error: "Kundenname ist erforderlich." };
   if (!["active", "planned", "completed"].includes(status)) {
@@ -309,6 +312,7 @@ export async function updateCustomer(
           paymentDay: paymentDayRaw,
           paymentMethod,
           paymentConfig,
+          closingDate,
           contractSigned,
           notes,
         },
