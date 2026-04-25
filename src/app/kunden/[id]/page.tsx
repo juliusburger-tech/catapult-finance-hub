@@ -19,6 +19,7 @@ type PageProps = {
 
 export default async function KundenDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const totalCustomers = await prisma.customer.count();
 
   const customer = await prisma.customer.findUnique({
     where: { id },
@@ -39,6 +40,10 @@ export default async function KundenDetailPage({ params }: PageProps) {
         <span className="text-[var(--color-text-subtle)]">— </span>
         Kunde
         <span className="text-[var(--color-text-subtle)]"> —</span>
+      </p>
+      <p className="text-sm font-medium text-[var(--color-text-muted)]">
+        Gesamtanzahl Kunden:{" "}
+        <span className="font-extrabold text-[var(--color-text)]">{totalCustomers}</span>
       </p>
 
       <CustomerDetailTabs
