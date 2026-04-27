@@ -69,3 +69,39 @@ export async function updateEntryNoteFromForm(entryId: string, formData: FormDat
   const notes = String(formData.get("notes") ?? "");
   await updateEntryNote(entryId, notes);
 }
+
+export async function createOtherPayment(formData: FormData) {
+  const title = String(formData.get("title") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim() || "Sonstiges";
+  const amount = Number(formData.get("amount"));
+  const paymentDateRaw = String(formData.get("paymentDate") ?? "").trim();
+
+  if (!title || !Number.isFinite(amount) || amount <= 0 || !paymentDateRaw) {
+    return;
+  }
+
+  const paymentDate = new Date(paymentDateRaw);
+  if (Number.isNaN(paymentDate.getTime())) {
+    return;
+  }
+
+  await prisma.otherPayment.create({
+    data: {
+      title,
+      category,
+      amount,
+      paymentDate,
+      month: paymentDate.getMonth() + 1,
+      year: paymentDate.getFullYear(),
+      notes: String(formData.get("notes") ?? "").trim() || null,
+    },
+  });
+
+  revalidatePath("/rechnungen");
+}
+
+export async function deleteOtherPayment(id: string) {
+  if (!id) return;
+  await prisma.otherPayment.delete({ where: { id } });
+  revalidatePath("/rechnungen");
+}

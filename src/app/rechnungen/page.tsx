@@ -9,6 +9,8 @@ import { prisma } from "@/lib/prisma";
 import { formatEuro } from "@/lib/format";
 
 import {
+  createOtherPayment,
+  deleteOtherPayment,
   toggleInvoiceSent,
   togglePaid,
   toggleSepaConfirmed,
@@ -119,16 +121,23 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
       },
     },
   });
+  const otherPayments = await prisma.otherPayment.findMany({
+    where: { year, month: selectedMonth },
+    orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
+  });
 
   const totalEntries = entries.length;
   const invoicesSentCount = entries.filter((entry) => entry.invoiceSent).length;
   const unpaidCount = entries.filter((entry) => !entry.paid).length;
   const paidCount = entries.filter((entry) => entry.paid).length;
   const invoicePendingCount = entries.filter((entry) => !entry.invoiceSent).length;
-  const plannedRevenue = entries.reduce((sum, entry) => sum + entry.amount, 0);
-  const actualRevenue = entries
+  const invoicePlannedRevenue = entries.reduce((sum, entry) => sum + entry.amount, 0);
+  const invoiceActualRevenue = entries
     .filter((entry) => entry.paid)
     .reduce((sum, entry) => sum + entry.amount, 0);
+  const otherPaymentsTotal = otherPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const plannedRevenue = invoicePlannedRevenue + otherPaymentsTotal;
+  const actualRevenue = invoiceActualRevenue + otherPaymentsTotal;
   const retainerEntries = entries.filter((entry) => entry.entryType === "retainer");
   const retainerCashflow = retainerEntries.reduce((sum, entry) => sum + entry.amount, 0);
   const closedDealVolume = closedDeals.reduce(
@@ -221,8 +230,16 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
         <KpiCard label="Rechnungen ausstehend" value={`${invoicePendingCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Bezahlt" value={`${paidCount}`} hint={`von ${totalEntries}`} />
         <KpiCard label="Offen (unbezahlt)" value={`${unpaidCount}`} hint={`von ${totalEntries}`} />
-        <KpiCard label="Soll-Umsatz" value={formatKpiEuro(plannedRevenue)} />
-        <KpiCard label="Ist-Umsatz" value={formatKpiEuro(actualRevenue)} />
+        <KpiCard
+          label="Soll-Umsatz"
+          value={formatKpiEuro(plannedRevenue)}
+          hint={`inkl. ${formatKpiEuro(otherPaymentsTotal)} sonstige Zahlungen`}
+        />
+        <KpiCard
+          label="Ist-Umsatz"
+          value={formatKpiEuro(actualRevenue)}
+          hint={`inkl. ${formatKpiEuro(otherPaymentsTotal)} sonstige Zahlungen`}
+        />
         <div
           className="flex flex-col gap-2 rounded-[var(--radius-card-token)] border bg-[var(--color-surface)] p-5"
           style={{
@@ -400,6 +417,123 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
                 </tr>
               ) : null}
             </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section
+        className="rounded-[var(--radius-container-token)] border bg-[var(--color-surface)] p-6"
+        style={{
+          borderColor: "var(--color-border-token)",
+          boxShadow: "var(--shadow-card-token)",
+        }}
+      >
+        <div className="mb-5 flex flex-col gap-2">
+          <h2 className="text-xl font-extrabold text-[var(--color-text)]">Sonstige Zahlungen</h2>
+          <p className="text-sm text-[var(--color-text-muted)]">
+            Kickbacks, Trainings, Reiseerlöse oder weitere Einnahmen für {formatMonthYear(selectedMonth, year)}.
+          </p>
+        </div>
+
+        <form action={createOtherPayment} className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <input type="hidden" name="month" value={selectedMonth} />
+          <input type="hidden" name="year" value={year} />
+          <input
+            type="text"
+            name="title"
+            placeholder="Bezeichnung (z. B. Kickback Partner X)"
+            required
+            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] xl:col-span-2"
+          />
+          <input
+            type="text"
+            name="category"
+            placeholder="Kategorie (z. B. Kickback)"
+            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
+          />
+          <input
+            type="number"
+            name="amount"
+            min="0.01"
+            step="0.01"
+            required
+            placeholder="Betrag"
+            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
+          />
+          <input
+            type="date"
+            name="paymentDate"
+            required
+            defaultValue={`${year}-${String(selectedMonth).padStart(2, "0")}-${String(Math.min(now.getDate(), 28)).padStart(2, "0")}`}
+            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
+          />
+          <input
+            type="text"
+            name="notes"
+            placeholder="Notiz (optional)"
+            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] md:col-span-2 xl:col-span-4"
+          />
+          <Button type="submit" className="h-10 xl:col-span-1">
+            Zahlung erfassen
+          </Button>
+        </form>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead>
+              <tr className="border-b border-[var(--color-border-token)] text-left text-[var(--color-text-subtle)]">
+                <th className="pb-3 pr-4 font-medium">Bezeichnung</th>
+                <th className="pb-3 pr-4 font-medium">Kategorie</th>
+                <th className="pb-3 pr-4 font-medium">Datum</th>
+                <th className="pb-3 pr-4 font-medium">Betrag</th>
+                <th className="pb-3 pr-4 font-medium">Notiz</th>
+                <th className="pb-3 pr-4 font-medium">Aktion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {otherPayments.map((payment) => (
+                <tr key={payment.id} className="border-b border-[var(--color-border-token)]">
+                  <td className="py-3 pr-4 font-semibold text-[var(--color-text)]">{payment.title}</td>
+                  <td className="py-3 pr-4 text-[var(--color-text-muted)]">{payment.category}</td>
+                  <td className="py-3 pr-4 text-[var(--color-text-muted)]">
+                    {new Intl.DateTimeFormat("de-DE", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                    }).format(payment.paymentDate)}
+                  </td>
+                  <td className="py-3 pr-4 font-semibold text-[var(--color-text)]">
+                    {formatEuro(payment.amount)}
+                  </td>
+                  <td className="py-3 pr-4 text-[var(--color-text-muted)]">{payment.notes || "-"}</td>
+                  <td className="py-3 pr-4">
+                    <form action={deleteOtherPayment.bind(null, payment.id)}>
+                      <Button variant="outline" size="sm">
+                        Entfernen
+                      </Button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+              {otherPayments.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-sm text-[var(--color-text-muted)]">
+                    Keine sonstigen Zahlungen für diesen Monat erfasst.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={3} className="pt-4 font-semibold text-[var(--color-text)]">
+                  Summe sonstige Zahlungen
+                </td>
+                <td className="pt-4 font-extrabold text-[var(--color-text)]">
+                  {formatEuro(otherPaymentsTotal)}
+                </td>
+                <td colSpan={2} />
+              </tr>
+            </tfoot>
           </table>
         </div>
       </section>
