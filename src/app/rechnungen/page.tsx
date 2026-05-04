@@ -123,7 +123,27 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
   });
   const otherPayments = await prisma.otherPayment.findMany({
     where: { year, month: selectedMonth },
+    include: {
+      customer: {
+        select: { name: true },
+      },
+    },
     orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
+  });
+  const yearlyOtherPaymentsForAv = await prisma.otherPayment.findMany({
+    where: {
+      year,
+      includeInAv: true,
+      salesType: { in: ["cross_sell", "upsell"] },
+    },
+    select: {
+      amount: true,
+      paymentDate: true,
+    },
+  });
+  const customersForOtherPayments = await prisma.customer.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
   });
 
   const totalEntries = entries.length;
@@ -145,6 +165,14 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
       sum + customer.paymentEntries.reduce((customerSum, entry) => customerSum + entry.amount, 0),
     0,
   );
+  const monthlyCrossUpsellVolume = otherPayments
+    .filter(
+      (payment) =>
+        payment.includeInAv &&
+        (payment.salesType === "cross_sell" || payment.salesType === "upsell"),
+    )
+    .reduce((sum, payment) => sum + payment.amount, 0);
+  const closedDealVolumeWithCrossUpsell = closedDealVolume + monthlyCrossUpsellVolume;
   const quarterDealVolume = yearlyClosedDeals.reduce(
     (acc, customer) => {
       if (!customer.closingDate) return acc;
@@ -158,6 +186,10 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
     },
     [0, 0, 0, 0] as [number, number, number, number],
   );
+  for (const payment of yearlyOtherPaymentsForAv) {
+    const quarter = Math.floor(payment.paymentDate.getMonth() / 3);
+    quarterDealVolume[quarter] += payment.amount;
+  }
   const yearlyDealVolumeTotal = quarterDealVolume.reduce((sum, value) => sum + value, 0);
 
   const dueNotSentCount =
@@ -251,9 +283,12 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
             Abgeschlossenes Dealvolumen (AV)
           </p>
           <p className="text-2xl font-extrabold tracking-tight text-[var(--color-text)]">
-            {formatKpiEuro(closedDealVolume)}
+            {formatKpiEuro(closedDealVolumeWithCrossUpsell)}
           </p>
-          <p className="text-sm text-[var(--color-text-muted)]">{closedDeals.length} Closings im Monat</p>
+          <p className="text-sm text-[var(--color-text-muted)]">
+            {closedDeals.length} Closings + {formatKpiEuro(monthlyCrossUpsellVolume)} Cross-/Upsell im
+            Monat
+          </p>
           <details className="rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface-raised)] px-3 py-2">
             <summary className="cursor-pointer text-xs font-semibold text-[var(--color-text)]">
               Quartalsübersicht {year}
@@ -445,6 +480,27 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
             required
             className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] xl:col-span-2"
           />
+          <select
+            name="customerId"
+            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
+            defaultValue=""
+          >
+            <option value="">Kein Kunde zugeordnet</option>
+            {customersForOtherPayments.map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.name}
+              </option>
+            ))}
+          </select>
+          <select
+            name="salesType"
+            defaultValue="other"
+            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
+          >
+            <option value="other">Typ: Sonstiges</option>
+            <option value="cross_sell">Typ: Cross-Sell</option>
+            <option value="upsell">Typ: Upsell</option>
+          </select>
           <input
             type="text"
             name="category"
@@ -467,11 +523,15 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
             defaultValue={`${year}-${String(selectedMonth).padStart(2, "0")}-${String(Math.min(now.getDate(), 28)).padStart(2, "0")}`}
             className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
           />
+          <label className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]">
+            <input type="checkbox" name="includeInAv" className="size-4 accent-[var(--color-primary)]" />
+            Im AV berücksichtigen
+          </label>
           <input
             type="text"
             name="notes"
             placeholder="Notiz (optional)"
-            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] md:col-span-2 xl:col-span-4"
+            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] md:col-span-2 xl:col-span-3"
           />
           <Button type="submit" className="h-10 xl:col-span-1">
             Zahlung erfassen
@@ -483,6 +543,8 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
             <thead>
               <tr className="border-b border-[var(--color-border-token)] text-left text-[var(--color-text-subtle)]">
                 <th className="pb-3 pr-4 font-medium">Bezeichnung</th>
+                <th className="pb-3 pr-4 font-medium">Kunde</th>
+                <th className="pb-3 pr-4 font-medium">Vertriebsart</th>
                 <th className="pb-3 pr-4 font-medium">Kategorie</th>
                 <th className="pb-3 pr-4 font-medium">Datum</th>
                 <th className="pb-3 pr-4 font-medium">Betrag</th>
@@ -494,6 +556,15 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
               {otherPayments.map((payment) => (
                 <tr key={payment.id} className="border-b border-[var(--color-border-token)]">
                   <td className="py-3 pr-4 font-semibold text-[var(--color-text)]">{payment.title}</td>
+                  <td className="py-3 pr-4 text-[var(--color-text-muted)]">{payment.customer?.name ?? "-"}</td>
+                  <td className="py-3 pr-4 text-[var(--color-text-muted)]">
+                    {payment.salesType === "cross_sell"
+                      ? "Cross-Sell"
+                      : payment.salesType === "upsell"
+                        ? "Upsell"
+                        : "Sonstiges"}
+                    {payment.includeInAv ? " · AV" : ""}
+                  </td>
                   <td className="py-3 pr-4 text-[var(--color-text-muted)]">{payment.category}</td>
                   <td className="py-3 pr-4 text-[var(--color-text-muted)]">
                     {new Intl.DateTimeFormat("de-DE", {
@@ -517,7 +588,7 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
               ))}
               {otherPayments.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-sm text-[var(--color-text-muted)]">
+                  <td colSpan={8} className="py-8 text-center text-sm text-[var(--color-text-muted)]">
                     Keine sonstigen Zahlungen für diesen Monat erfasst.
                   </td>
                 </tr>
@@ -525,7 +596,7 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={3} className="pt-4 font-semibold text-[var(--color-text)]">
+                <td colSpan={5} className="pt-4 font-semibold text-[var(--color-text)]">
                   Summe sonstige Zahlungen
                 </td>
                 <td className="pt-4 font-extrabold text-[var(--color-text)]">

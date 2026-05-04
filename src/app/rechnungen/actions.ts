@@ -73,8 +73,16 @@ export async function updateEntryNoteFromForm(entryId: string, formData: FormDat
 export async function createOtherPayment(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim() || "Sonstiges";
+  const salesTypeRaw = String(formData.get("salesType") ?? "other").trim();
+  const salesType =
+    salesTypeRaw === "cross_sell" || salesTypeRaw === "upsell" ? salesTypeRaw : "other";
+  const customerIdRaw = String(formData.get("customerId") ?? "").trim();
   const amount = Number(formData.get("amount"));
   const paymentDateRaw = String(formData.get("paymentDate") ?? "").trim();
+  const includeInAv =
+    String(formData.get("includeInAv") ?? "").trim() === "on" ||
+    salesType === "cross_sell" ||
+    salesType === "upsell";
 
   if (!title || !Number.isFinite(amount) || amount <= 0 || !paymentDateRaw) {
     return;
@@ -87,8 +95,11 @@ export async function createOtherPayment(formData: FormData) {
 
   await prisma.otherPayment.create({
     data: {
+      customerId: customerIdRaw || null,
       title,
       category,
+      salesType,
+      includeInAv,
       amount,
       paymentDate,
       month: paymentDate.getMonth() + 1,

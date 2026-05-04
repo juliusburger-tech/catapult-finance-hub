@@ -73,6 +73,7 @@ model Customer {
   createdAt  DateTime               @default(now())
   updatedAt  DateTime               @updatedAt
   paymentEntries PaymentScheduleEntry[]
+  otherPayments  OtherPayment[]
 
   @@index([status])
   @@index([contractStart])
@@ -106,8 +107,12 @@ model PaymentScheduleEntry {
 
 model OtherPayment {
   id          String   @id @default(cuid())
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   title       String
   category    String
+  salesType   String   @default("other")
+  includeInAv Boolean  @default(false)
   amount      Float
   paymentDate DateTime
   month       Int
@@ -117,4 +122,5 @@ model OtherPayment {
   updatedAt   DateTime @updatedAt
 
   @@index([year, month])
+  @@index([customerId])
 }
