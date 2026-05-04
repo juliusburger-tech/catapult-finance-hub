@@ -110,9 +110,13 @@ model OtherPayment {
   customerId  String?
   customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   title       String
+  kind        String   @default("other_payment")
   category    String
   salesType   String   @default("other")
   includeInAv Boolean  @default(false)
+  planGroupId String?
+  planType    String?
+  planConfig  String?
   amount      Float
   paymentDate DateTime
   month       Int
@@ -123,4 +127,6 @@ model OtherPayment {
 
   @@index([year, month])
   @@index([customerId])
+  @@index([kind])
+  @@index([planGroupId])
 }
