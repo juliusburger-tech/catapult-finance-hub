@@ -1,6 +1,5 @@
 "use server";
 
-import { addMonths } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 
@@ -112,12 +111,12 @@ export async function createCrossUpsellPlan(formData: FormData) {
   const salesTypeRaw = String(formData.get("salesType") ?? "cross_sell").trim();
   const salesType = salesTypeRaw === "upsell" ? "upsell" : "cross_sell";
   const planTypeRaw = String(formData.get("planType") ?? "one_time").trim();
-  const planType =
-    planTypeRaw === "installment" || planTypeRaw === "retainer" ? planTypeRaw : "one_time";
+  const planType = planTypeRaw === "installment" ? "installment" : "one_time";
   const startDateRaw = String(formData.get("startDate") ?? "").trim();
+  const totalAmount = Number(formData.get("totalAmount"));
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
-  if (!title || !startDateRaw) return;
+  if (!title || !startDateRaw || !Number.isFinite(totalAmount) || totalAmount <= 0) return;
 
   const startDate = new Date(startDateRaw);
   if (Number.isNaN(startDate.getTime())) return;
@@ -141,9 +140,6 @@ export async function createCrossUpsellPlan(formData: FormData) {
   }> = [];
 
   if (planType === "one_time") {
-    const amount = Number(formData.get("amount"));
-    if (!Number.isFinite(amount) || amount <= 0) return;
-
     entries.push({
       customerId: customerIdRaw || null,
       title,
@@ -153,81 +149,59 @@ export async function createCrossUpsellPlan(formData: FormData) {
       includeInAv: true,
       planGroupId,
       planType,
-      planConfig: JSON.stringify({ amount }),
-      amount,
+      planConfig: JSON.stringify({ totalAmount }),
+      amount: Math.round(totalAmount * 100) / 100,
       paymentDate: startDate,
       month: startDate.getMonth() + 1,
       year: startDate.getFullYear(),
       notes,
     });
-  } else if (planType === "installment") {
-    const totalAmount = Number(formData.get("totalAmount"));
-    const installmentCount = Number(formData.get("installmentCount"));
-    const intervalMonths = Number(formData.get("intervalMonths"));
-    if (
-      !Number.isFinite(totalAmount) ||
-      totalAmount <= 0 ||
-      !Number.isInteger(installmentCount) ||
-      installmentCount < 2 ||
-      !Number.isInteger(intervalMonths) ||
-      intervalMonths < 1
-    ) {
-      return;
-    }
-
-    const rawRate = totalAmount / installmentCount;
-    const roundedRate = Math.round(rawRate * 100) / 100;
-    let allocated = 0;
-    for (let i = 0; i < installmentCount; i += 1) {
-      const date = addMonths(startDate, i * intervalMonths);
-      const isLast = i === installmentCount - 1;
-      const amount = isLast ? Math.round((totalAmount - allocated) * 100) / 100 : roundedRate;
-      allocated += amount;
-      entries.push({
-        customerId: customerIdRaw || null,
-        title: `${title} (Rate ${i + 1}/${installmentCount})`,
-        kind: "cross_upsell",
-        category,
-        salesType,
-        includeInAv: true,
-        planGroupId,
-        planType,
-        planConfig: JSON.stringify({ totalAmount, installmentCount, intervalMonths }),
-        amount,
-        paymentDate: date,
-        month: date.getMonth() + 1,
-        year: date.getFullYear(),
-        notes,
-      });
-    }
   } else {
-    const monthlyAmount = Number(formData.get("monthlyAmount"));
-    const monthsCount = Number(formData.get("monthsCount"));
-    if (
-      !Number.isFinite(monthlyAmount) ||
-      monthlyAmount <= 0 ||
-      !Number.isInteger(monthsCount) ||
-      monthsCount < 1
-    ) {
-      return;
+    const installmentPlanRaw = String(formData.get("installmentPlan") ?? "").trim();
+    if (!installmentPlanRaw) return;
+
+    const rows = installmentPlanRaw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (rows.length < 2) return;
+
+    const parsedRows: Array<{ date: Date; amount: number }> = [];
+    for (const row of rows) {
+      const [monthRaw, amountRaw] = row.split(":").map((part) => part?.trim() ?? "");
+      if (!monthRaw || !amountRaw) return;
+      const date = new Date(`${monthRaw}-01T00:00:00.000Z`);
+      const amount = Number(amountRaw.replace(",", "."));
+      if (Number.isNaN(date.getTime()) || !Number.isFinite(amount) || amount <= 0) return;
+      parsedRows.push({ date, amount: Math.round(amount * 100) / 100 });
     }
 
-    for (let i = 0; i < monthsCount; i += 1) {
-      const date = addMonths(startDate, i);
+    const planTotal = Math.round(parsedRows.reduce((sum, row) => sum + row.amount, 0) * 100) / 100;
+    const expectedTotal = Math.round(totalAmount * 100) / 100;
+    if (Math.abs(planTotal - expectedTotal) > 0.01) return;
+
+    for (let i = 0; i < parsedRows.length; i += 1) {
+      const item = parsedRows[i];
       entries.push({
         customerId: customerIdRaw || null,
-        title: `${title} (Monat ${i + 1}/${monthsCount})`,
+        title: `${title} (Rate ${i + 1}/${parsedRows.length})`,
         kind: "cross_upsell",
         category,
         salesType,
         includeInAv: true,
         planGroupId,
         planType,
-        planConfig: JSON.stringify({ monthlyAmount, monthsCount }),
-        amount: Math.round(monthlyAmount * 100) / 100,
-        paymentDate: date,
-        month: date.getMonth() + 1,
-        year: date.getFullYear(),
+        planConfig: JSON.stringify({
+          totalAmount: expectedTotal,
+          installments: parsedRows.map((row) => ({
+            month: row.date.toISOString().slice(0, 7),
+            amount: row.amount,
+          })),
+        }),
+        amount: item.amount,
+        paymentDate: item.date,
+        month: item.date.getUTCMonth() + 1,
+        year: item.date.getUTCFullYear(),
         notes,
       });
     }

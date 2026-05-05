@@ -583,7 +583,7 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
         <div className="mb-5 flex flex-col gap-2">
           <h2 className="text-xl font-extrabold text-[var(--color-text)]">Cross-/Upsells</h2>
           <p className="text-sm text-[var(--color-text-muted)]">
-            Zusatzverkäufe mit eigenem Zahlungsplan. Diese Einträge werden automatisch im AV berücksichtigt.
+            Zusatzverkäufe mit Gesamtbetrag und flexiblem Zahlungsplan. Diese Einträge werden automatisch im AV berücksichtigt.
           </p>
         </div>
 
@@ -628,69 +628,36 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
             defaultValue={`${year}-${String(selectedMonth).padStart(2, "0")}-${String(Math.min(now.getDate(), 28)).padStart(2, "0")}`}
             className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
           />
+          <input
+            type="number"
+            name="totalAmount"
+            min="0.01"
+            step="0.01"
+            required
+            placeholder="Gesamtbetrag"
+            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
+          />
           <select
             name="planType"
             defaultValue="one_time"
             className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
           >
             <option value="one_time">Zahlungsplan: Einmalzahlung</option>
-            <option value="installment">Zahlungsplan: Raten</option>
-            <option value="retainer">Zahlungsplan: Retainer (Laufzeit)</option>
+            <option value="installment">Zahlungsplan: Individuelle Raten</option>
           </select>
-          <input
-            type="number"
-            name="amount"
-            min="0.01"
-            step="0.01"
-            placeholder="Einmalbetrag (bei Einmalzahlung)"
-            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
+          <textarea
+            name="installmentPlan"
+            placeholder={"Ratenplan (nur bei Raten):\n2026-06:3000\n2026-08:2500\n2026-11:1500"}
+            className="min-h-[84px] rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] md:col-span-2 xl:col-span-3"
           />
-          <input
-            type="number"
-            name="totalAmount"
-            min="0.01"
-            step="0.01"
-            placeholder="Gesamtbetrag (bei Raten)"
-            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
-          />
-          <input
-            type="number"
-            name="installmentCount"
-            min="2"
-            step="1"
-            placeholder="Ratenanzahl (z. B. 2)"
-            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
-          />
-          <input
-            type="number"
-            name="intervalMonths"
-            min="1"
-            step="1"
-            placeholder="Monate zwischen Raten"
-            defaultValue={1}
-            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
-          />
-          <input
-            type="number"
-            name="monthlyAmount"
-            min="0.01"
-            step="0.01"
-            placeholder="Monatsbetrag (bei Retainer)"
-            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
-          />
-          <input
-            type="number"
-            name="monthsCount"
-            min="1"
-            step="1"
-            placeholder="Anzahl Monate (bei Retainer)"
-            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
-          />
+          <p className="text-xs text-[var(--color-text-muted)] md:col-span-2 xl:col-span-3">
+            Format je Zeile: <code>YYYY-MM:Betrag</code>. Summe der Raten muss dem Gesamtbetrag entsprechen.
+          </p>
           <input
             type="text"
             name="notes"
             placeholder="Notiz (optional)"
-            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] md:col-span-2 xl:col-span-5"
+            className="h-10 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)]"
           />
           <Button type="submit" className="h-10 xl:col-span-1">
             Cross-/Upsell erfassen
@@ -720,11 +687,7 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
                     {payment.salesType === "upsell" ? "Upsell" : "Cross-Sell"}
                   </td>
                   <td className="py-3 pr-4 text-[var(--color-text-muted)]">
-                    {payment.planType === "installment"
-                      ? "Raten"
-                      : payment.planType === "retainer"
-                        ? "Retainer"
-                        : "Einmalzahlung"}
+                    {payment.planType === "installment" ? "Individuelle Raten" : "Einmalzahlung"}
                   </td>
                   <td className="py-3 pr-4 text-[var(--color-text-muted)]">
                     {new Intl.DateTimeFormat("de-DE", {
