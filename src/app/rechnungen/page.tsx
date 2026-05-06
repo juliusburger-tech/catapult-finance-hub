@@ -17,6 +17,7 @@ import {
   togglePaid,
   toggleSepaConfirmed,
   updateCrossUpsellPlan,
+  updatePaymentScheduleEntryFromForm,
   updateEntryNoteFromForm,
 } from "./actions";
 
@@ -489,7 +490,7 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
                     <td className="py-3 pr-4">
                       <form
                         action={updateEntryNoteFromForm.bind(null, entry.id)}
-                        className="flex items-center gap-2"
+                        className="mb-2 flex items-center gap-2"
                       >
                         <input
                           type="text"
@@ -502,6 +503,33 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
                           Speichern
                         </Button>
                       </form>
+                      <details className="rounded-md border border-[var(--color-border-token)] px-2 py-1.5">
+                        <summary className="cursor-pointer text-[11px] font-semibold text-[var(--color-text-muted)]">
+                          Zahlungsplan anpassen
+                        </summary>
+                        <form
+                          action={updatePaymentScheduleEntryFromForm.bind(null, entry.id)}
+                          className="mt-2 flex flex-col gap-2"
+                        >
+                          <input
+                            type="number"
+                            name="amount"
+                            min="0.01"
+                            step="0.01"
+                            defaultValue={entry.amount}
+                            className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)]"
+                          />
+                          <input
+                            type="date"
+                            name="dueDate"
+                            defaultValue={`${entry.dueYear}-${String(entry.dueMonth).padStart(2, "0")}-${String(entry.dueDay).padStart(2, "0")}`}
+                            className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)]"
+                          />
+                          <Button variant="outline" size="sm">
+                            Plan speichern
+                          </Button>
+                        </form>
+                      </details>
                     </td>
                   </tr>
                 );

@@ -175,6 +175,37 @@ export async function updateEntryNoteFromForm(entryId: string, formData: FormDat
   await updateEntryNote(entryId, notes);
 }
 
+export async function updatePaymentScheduleEntryFromForm(entryId: string, formData: FormData) {
+  const amount = Number(formData.get("amount"));
+  const dueDateRaw = String(formData.get("dueDate") ?? "").trim();
+
+  if (!Number.isFinite(amount) || amount <= 0 || !dueDateRaw) {
+    return;
+  }
+
+  const dueDate = new Date(dueDateRaw);
+  if (Number.isNaN(dueDate.getTime())) {
+    return;
+  }
+
+  const dueDay = dueDate.getDate();
+  const dueMonth = dueDate.getMonth() + 1;
+  const dueYear = dueDate.getFullYear();
+
+  await prisma.paymentScheduleEntry.update({
+    where: { id: entryId },
+    data: {
+      amount: Math.round(amount * 100) / 100,
+      dueDay,
+      dueMonth,
+      dueYear,
+    },
+  });
+
+  revalidatePath("/rechnungen");
+  revalidatePath("/kunden");
+}
+
 export async function createOtherPayment(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim() || "Sonstiges";
