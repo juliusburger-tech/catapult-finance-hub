@@ -10,6 +10,7 @@ import {
   toggleInvoiceSent,
   togglePaid,
   toggleSepaConfirmed,
+  updatePaymentScheduleEntryFromForm,
   updateEntryNoteFromForm,
 } from "@/app/rechnungen/actions";
 import { PaymentModelBadge } from "@/components/invoices/payment-model-badge";
@@ -352,6 +353,7 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
                   <th className="pb-3 pr-4 font-medium">SEPA</th>
                   <th className="pb-3 pr-4 font-medium">Bezahlt</th>
                   <th className="pb-3 pr-4 font-medium">Notiz</th>
+                  <th className="pb-3 pr-4 font-medium">Plan anpassen</th>
                 </tr>
               </thead>
               <tbody>
@@ -397,6 +399,30 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
                         />
                         <Button variant="outline" size="sm">
                           Speichern
+                        </Button>
+                      </form>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <form
+                        action={updatePaymentScheduleEntryFromForm.bind(null, entry.id)}
+                        className="flex min-w-[220px] items-center gap-2"
+                      >
+                        <input
+                          type="number"
+                          name="amount"
+                          min="0.01"
+                          step="0.01"
+                          defaultValue={entry.amount}
+                          className="h-8 w-24 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs"
+                        />
+                        <input
+                          type="date"
+                          name="dueDate"
+                          defaultValue={`${entry.dueYear}-${String(entry.dueMonth).padStart(2, "0")}-${String(entry.dueDay).padStart(2, "0")}`}
+                          className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs"
+                        />
+                        <Button variant="outline" size="sm">
+                          Update
                         </Button>
                       </form>
                     </td>
