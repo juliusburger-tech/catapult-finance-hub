@@ -5,6 +5,110 @@ import { randomUUID } from "node:crypto";
 
 import { prisma } from "@/lib/prisma";
 
+type CrossUpsellEntryInput = {
+  planGroupId: string;
+  title: string;
+  category: string;
+  customerId: string | null;
+  salesType: "cross_sell" | "upsell";
+  planType: "one_time" | "installment";
+  startDate: Date;
+  totalAmount: number;
+  installmentPlanRaw: string;
+  notes: string | null;
+};
+
+function toRoundedAmount(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function buildCrossUpsellEntries(input: CrossUpsellEntryInput) {
+  const entries: Array<{
+    customerId: string | null;
+    title: string;
+    kind: string;
+    category: string;
+    salesType: string;
+    includeInAv: boolean;
+    planGroupId: string;
+    planType: string;
+    planConfig: string;
+    amount: number;
+    paymentDate: Date;
+    month: number;
+    year: number;
+    notes: string | null;
+  }> = [];
+
+  if (input.planType === "one_time") {
+    entries.push({
+      customerId: input.customerId,
+      title: input.title,
+      kind: "cross_upsell",
+      category: input.category,
+      salesType: input.salesType,
+      includeInAv: true,
+      planGroupId: input.planGroupId,
+      planType: input.planType,
+      planConfig: JSON.stringify({ totalAmount: input.totalAmount }),
+      amount: toRoundedAmount(input.totalAmount),
+      paymentDate: input.startDate,
+      month: input.startDate.getMonth() + 1,
+      year: input.startDate.getFullYear(),
+      notes: input.notes,
+    });
+
+    return entries;
+  }
+
+  const rows = input.installmentPlanRaw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (rows.length < 2) return [];
+
+  const parsedRows: Array<{ date: Date; amount: number; monthKey: string }> = [];
+  for (const row of rows) {
+    const [monthRaw, amountRaw] = row.split(":").map((part) => part?.trim() ?? "");
+    if (!monthRaw || !amountRaw) return [];
+
+    const date = new Date(`${monthRaw}-01T00:00:00.000Z`);
+    const amount = Number(amountRaw.replace(",", "."));
+    if (Number.isNaN(date.getTime()) || !Number.isFinite(amount) || amount <= 0) return [];
+
+    parsedRows.push({ date, amount: toRoundedAmount(amount), monthKey: monthRaw });
+  }
+
+  const planTotal = toRoundedAmount(parsedRows.reduce((sum, row) => sum + row.amount, 0));
+  const expectedTotal = toRoundedAmount(input.totalAmount);
+  if (Math.abs(planTotal - expectedTotal) > 0.01) return [];
+
+  for (let i = 0; i < parsedRows.length; i += 1) {
+    const item = parsedRows[i];
+    entries.push({
+      customerId: input.customerId,
+      title: `${input.title} (Rate ${i + 1}/${parsedRows.length})`,
+      kind: "cross_upsell",
+      category: input.category,
+      salesType: input.salesType,
+      includeInAv: true,
+      planGroupId: input.planGroupId,
+      planType: input.planType,
+      planConfig: JSON.stringify({
+        totalAmount: expectedTotal,
+        installments: parsedRows.map((row) => ({ month: row.monthKey, amount: row.amount })),
+      }),
+      amount: item.amount,
+      paymentDate: item.date,
+      month: item.date.getUTCMonth() + 1,
+      year: item.date.getUTCFullYear(),
+      notes: input.notes,
+    });
+  }
+
+  return entries;
+}
+
 export async function toggleInvoiceSent(entryId: string) {
   const row = await prisma.paymentScheduleEntry.findUnique({
     where: { id: entryId },
@@ -122,93 +226,74 @@ export async function createCrossUpsellPlan(formData: FormData) {
   if (Number.isNaN(startDate.getTime())) return;
 
   const planGroupId = randomUUID();
-  const entries: Array<{
-    customerId: string | null;
-    title: string;
-    kind: string;
-    category: string;
-    salesType: string;
-    includeInAv: boolean;
-    planGroupId: string;
-    planType: string;
-    planConfig: string;
-    amount: number;
-    paymentDate: Date;
-    month: number;
-    year: number;
-    notes: string | null;
-  }> = [];
-
-  if (planType === "one_time") {
-    entries.push({
-      customerId: customerIdRaw || null,
-      title,
-      kind: "cross_upsell",
-      category,
-      salesType,
-      includeInAv: true,
-      planGroupId,
-      planType,
-      planConfig: JSON.stringify({ totalAmount }),
-      amount: Math.round(totalAmount * 100) / 100,
-      paymentDate: startDate,
-      month: startDate.getMonth() + 1,
-      year: startDate.getFullYear(),
-      notes,
-    });
-  } else {
-    const installmentPlanRaw = String(formData.get("installmentPlan") ?? "").trim();
-    if (!installmentPlanRaw) return;
-
-    const rows = installmentPlanRaw
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    if (rows.length < 2) return;
-
-    const parsedRows: Array<{ date: Date; amount: number }> = [];
-    for (const row of rows) {
-      const [monthRaw, amountRaw] = row.split(":").map((part) => part?.trim() ?? "");
-      if (!monthRaw || !amountRaw) return;
-      const date = new Date(`${monthRaw}-01T00:00:00.000Z`);
-      const amount = Number(amountRaw.replace(",", "."));
-      if (Number.isNaN(date.getTime()) || !Number.isFinite(amount) || amount <= 0) return;
-      parsedRows.push({ date, amount: Math.round(amount * 100) / 100 });
-    }
-
-    const planTotal = Math.round(parsedRows.reduce((sum, row) => sum + row.amount, 0) * 100) / 100;
-    const expectedTotal = Math.round(totalAmount * 100) / 100;
-    if (Math.abs(planTotal - expectedTotal) > 0.01) return;
-
-    for (let i = 0; i < parsedRows.length; i += 1) {
-      const item = parsedRows[i];
-      entries.push({
-        customerId: customerIdRaw || null,
-        title: `${title} (Rate ${i + 1}/${parsedRows.length})`,
-        kind: "cross_upsell",
-        category,
-        salesType,
-        includeInAv: true,
-        planGroupId,
-        planType,
-        planConfig: JSON.stringify({
-          totalAmount: expectedTotal,
-          installments: parsedRows.map((row) => ({
-            month: row.date.toISOString().slice(0, 7),
-            amount: row.amount,
-          })),
-        }),
-        amount: item.amount,
-        paymentDate: item.date,
-        month: item.date.getUTCMonth() + 1,
-        year: item.date.getUTCFullYear(),
-        notes,
-      });
-    }
-  }
+  const installmentPlanRaw = String(formData.get("installmentPlan") ?? "").trim();
+  const entries = buildCrossUpsellEntries({
+    planGroupId,
+    title,
+    category,
+    customerId: customerIdRaw || null,
+    salesType,
+    planType,
+    startDate,
+    totalAmount,
+    installmentPlanRaw,
+    notes,
+  });
 
   if (entries.length === 0) return;
   await prisma.otherPayment.createMany({ data: entries });
+  revalidatePath("/rechnungen");
+}
+
+export async function updateCrossUpsellPlan(formData: FormData) {
+  const planGroupId = String(formData.get("planGroupId") ?? "").trim();
+  if (!planGroupId) return;
+
+  const existing = await prisma.otherPayment.findMany({
+    where: { planGroupId, kind: "cross_upsell" },
+    orderBy: [{ paymentDate: "asc" }, { createdAt: "asc" }],
+  });
+  if (existing.length === 0) return;
+
+  const first = existing[0];
+  const fallbackTitle = first.title.replace(/\s+\(Rate \d+\/\d+\)\s*$/, "");
+  const title = String(formData.get("title") ?? fallbackTitle).trim() || fallbackTitle;
+  const category = String(formData.get("category") ?? first.category).trim() || first.category;
+  const customerIdRaw = String(formData.get("customerId") ?? "").trim();
+  const salesTypeRaw = String(formData.get("salesType") ?? first.salesType).trim();
+  const salesType: "cross_sell" | "upsell" = salesTypeRaw === "upsell" ? "upsell" : "cross_sell";
+  const planTypeRaw = String(formData.get("planType") ?? first.planType ?? "one_time").trim();
+  const planType: "one_time" | "installment" =
+    planTypeRaw === "installment" ? "installment" : "one_time";
+  const startDateRaw = String(formData.get("startDate") ?? "").trim();
+  const totalAmount = Number(formData.get("totalAmount"));
+  const installmentPlanRaw = String(formData.get("installmentPlan") ?? "").trim();
+  const notesRaw = String(formData.get("notes") ?? "");
+  const notes = notesRaw.trim() === "" ? null : notesRaw.trim();
+
+  if (!startDateRaw || !Number.isFinite(totalAmount) || totalAmount <= 0) return;
+  const startDate = new Date(startDateRaw);
+  if (Number.isNaN(startDate.getTime())) return;
+
+  const entries = buildCrossUpsellEntries({
+    planGroupId,
+    title,
+    category,
+    customerId: customerIdRaw || null,
+    salesType,
+    planType,
+    startDate,
+    totalAmount,
+    installmentPlanRaw,
+    notes,
+  });
+  if (entries.length === 0) return;
+
+  await prisma.$transaction([
+    prisma.otherPayment.deleteMany({ where: { planGroupId, kind: "cross_upsell" } }),
+    prisma.otherPayment.createMany({ data: entries }),
+  ]);
+
   revalidatePath("/rechnungen");
 }
 
@@ -225,5 +310,13 @@ export async function deleteOtherPayment(id: string) {
   } else {
     await prisma.otherPayment.delete({ where: { id } });
   }
+  revalidatePath("/rechnungen");
+}
+
+export async function deleteCrossUpsellPlan(planGroupId: string) {
+  if (!planGroupId) return;
+  await prisma.otherPayment.deleteMany({
+    where: { planGroupId, kind: "cross_upsell" },
+  });
   revalidatePath("/rechnungen");
 }

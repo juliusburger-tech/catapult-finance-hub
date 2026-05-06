@@ -11,10 +11,12 @@ import { formatEuro } from "@/lib/format";
 import {
   createCrossUpsellPlan,
   createOtherPayment,
+  deleteCrossUpsellPlan,
   deleteOtherPayment,
   toggleInvoiceSent,
   togglePaid,
   toggleSepaConfirmed,
+  updateCrossUpsellPlan,
   updateEntryNoteFromForm,
 } from "./actions";
 
@@ -48,6 +50,13 @@ function formatMonthYear(month: number, year: number): string {
 
 function formatKpiEuro(value: number): string {
   return formatEuro(value).replace(/\s/g, "\u00A0");
+}
+
+function toDateInputValue(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function toEntryTypeLabel(entryType: string): string {
@@ -162,6 +171,56 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
     .reduce((sum, entry) => sum + entry.amount, 0);
   const otherPaymentsTotal = otherPayments.reduce((sum, payment) => sum + payment.amount, 0);
   const crossUpsellPaymentsTotal = crossUpsellPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const crossUpsellPlans = Array.from(
+    crossUpsellPayments.reduce<
+      Map<
+        string,
+        {
+          planGroupId: string;
+          title: string;
+          category: string;
+          customerId: string;
+          customerName: string;
+          salesType: string;
+          planType: string;
+          notes: string;
+          startDate: Date;
+          totalAmount: number;
+          entries: Array<{ paymentDate: Date; amount: number }>;
+        }
+      >
+    >((acc, row) => {
+      const key = row.planGroupId ?? row.id;
+      const title = row.title.replace(/\s+\(Rate \d+\/\d+\)\s*$/, "");
+      const current = acc.get(key);
+      if (!current) {
+        acc.set(key, {
+          planGroupId: key,
+          title,
+          category: row.category,
+          customerId: row.customerId ?? "",
+          customerName: row.customer?.name ?? "-",
+          salesType: row.salesType,
+          planType: row.planType ?? "one_time",
+          notes: row.notes ?? "",
+          startDate: row.paymentDate,
+          totalAmount: row.amount,
+          entries: [{ paymentDate: row.paymentDate, amount: row.amount }],
+        });
+      } else {
+        if (row.paymentDate < current.startDate) current.startDate = row.paymentDate;
+        current.totalAmount += row.amount;
+        current.entries.push({ paymentDate: row.paymentDate, amount: row.amount });
+      }
+      return acc;
+    }, new Map()),
+  )
+    .map(([, plan]) => ({
+      ...plan,
+      totalAmount: Math.round(plan.totalAmount * 100) / 100,
+      entries: plan.entries.sort((a, b) => a.paymentDate.getTime() - b.paymentDate.getTime()),
+    }))
+    .sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
   const plannedRevenue = invoicePlannedRevenue + otherPaymentsTotal + crossUpsellPaymentsTotal;
   const actualRevenue = invoiceActualRevenue + otherPaymentsTotal + crossUpsellPaymentsTotal;
   const retainerEntries = entries.filter((entry) => entry.entryType === "retainer");
@@ -679,35 +738,113 @@ export default async function RechnungenPage({ searchParams }: PageProps) {
               </tr>
             </thead>
             <tbody>
-              {crossUpsellPayments.map((payment) => (
-                <tr key={payment.id} className="border-b border-[var(--color-border-token)]">
-                  <td className="py-3 pr-4 font-semibold text-[var(--color-text)]">{payment.title}</td>
-                  <td className="py-3 pr-4 text-[var(--color-text-muted)]">{payment.customer?.name ?? "-"}</td>
-                  <td className="py-3 pr-4 text-[var(--color-text-muted)]">
-                    {payment.salesType === "upsell" ? "Upsell" : "Cross-Sell"}
-                  </td>
-                  <td className="py-3 pr-4 text-[var(--color-text-muted)]">
-                    {payment.planType === "installment" ? "Individuelle Raten" : "Einmalzahlung"}
-                  </td>
-                  <td className="py-3 pr-4 text-[var(--color-text-muted)]">
-                    {new Intl.DateTimeFormat("de-DE", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                    }).format(payment.paymentDate)}
-                  </td>
-                  <td className="py-3 pr-4 font-semibold text-[var(--color-text)]">{formatEuro(payment.amount)}</td>
-                  <td className="py-3 pr-4 text-[var(--color-text-muted)]">{payment.notes || "-"}</td>
-                  <td className="py-3 pr-4">
-                    <form action={deleteOtherPayment.bind(null, payment.id)}>
-                      <Button variant="outline" size="sm">
-                        Plan entfernen
-                      </Button>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-              {crossUpsellPayments.length === 0 ? (
+              {crossUpsellPlans.map((plan) => {
+                const installmentPlanValue = plan.entries
+                  .map((entry) => `${toDateInputValue(entry.paymentDate).slice(0, 7)}:${entry.amount}`)
+                  .join("\n");
+
+                return (
+                  <tr key={plan.planGroupId} className="border-b border-[var(--color-border-token)] align-top">
+                    <td className="py-3 pr-4 font-semibold text-[var(--color-text)]">{plan.title}</td>
+                    <td className="py-3 pr-4 text-[var(--color-text-muted)]">{plan.customerName}</td>
+                    <td className="py-3 pr-4 text-[var(--color-text-muted)]">
+                      {plan.salesType === "upsell" ? "Upsell" : "Cross-Sell"}
+                    </td>
+                    <td className="py-3 pr-4 text-[var(--color-text-muted)]">
+                      {plan.planType === "installment" ? "Individuelle Raten" : "Einmalzahlung"}
+                    </td>
+                    <td className="py-3 pr-4 text-[var(--color-text-muted)]">
+                      {new Intl.DateTimeFormat("de-DE", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      }).format(plan.startDate)}
+                    </td>
+                    <td className="py-3 pr-4 font-semibold text-[var(--color-text)]">
+                      {formatEuro(plan.totalAmount)}
+                    </td>
+                    <td className="py-3 pr-4 text-[var(--color-text-muted)]">{plan.notes || "-"}</td>
+                    <td className="py-3 pr-4">
+                      <details className="rounded-md border border-[var(--color-border-token)] p-2">
+                        <summary className="cursor-pointer text-xs font-semibold text-[var(--color-text)]">
+                          Bearbeiten
+                        </summary>
+                        <form action={updateCrossUpsellPlan} className="mt-2 flex flex-col gap-2">
+                          <input type="hidden" name="planGroupId" value={plan.planGroupId} />
+                          <input
+                            type="text"
+                            name="title"
+                            defaultValue={plan.title}
+                            className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)]"
+                          />
+                          <input
+                            type="number"
+                            name="totalAmount"
+                            min="0.01"
+                            step="0.01"
+                            defaultValue={plan.totalAmount}
+                            className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)]"
+                          />
+                          <select
+                            name="planType"
+                            defaultValue={plan.planType === "installment" ? "installment" : "one_time"}
+                            className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)]"
+                          >
+                            <option value="one_time">Einmalzahlung</option>
+                            <option value="installment">Individuelle Raten</option>
+                          </select>
+                          <textarea
+                            name="installmentPlan"
+                            defaultValue={installmentPlanValue}
+                            placeholder={"YYYY-MM:Betrag\n2026-08:15000\n2026-11:12000"}
+                            className="min-h-[72px] rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
+                          />
+                          <input
+                            type="date"
+                            name="startDate"
+                            defaultValue={toDateInputValue(plan.startDate)}
+                            className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)]"
+                          />
+                          <select
+                            name="salesType"
+                            defaultValue={plan.salesType === "upsell" ? "upsell" : "cross_sell"}
+                            className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)]"
+                          >
+                            <option value="cross_sell">Cross-Sell</option>
+                            <option value="upsell">Upsell</option>
+                          </select>
+                          <select
+                            name="customerId"
+                            defaultValue={plan.customerId}
+                            className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)]"
+                          >
+                            <option value="">Kein Kunde zugeordnet</option>
+                            {customersForOtherPayments.map((customer) => (
+                              <option key={customer.id} value={customer.id}>
+                                {customer.name}
+                              </option>
+                            ))}
+                          </select>
+                          <input type="hidden" name="category" value={plan.category} />
+                          <input type="hidden" name="notes" value={plan.notes} />
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="default">
+                              Speichern
+                            </Button>
+                            <button
+                              formAction={deleteCrossUpsellPlan.bind(null, plan.planGroupId)}
+                              className="h-8 rounded-md border border-[var(--color-border-token)] px-2 text-xs text-[var(--color-text)]"
+                            >
+                              Löschen
+                            </button>
+                          </div>
+                        </form>
+                      </details>
+                    </td>
+                  </tr>
+                );
+              })}
+              {crossUpsellPlans.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-sm text-[var(--color-text-muted)]">
                     Keine Cross-/Upsell-Zahlungen für diesen Monat erfasst.
