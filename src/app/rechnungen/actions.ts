@@ -65,12 +65,14 @@ function buildCrossUpsellEntries(input: CrossUpsellEntryInput) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  if (rows.length < 2) return [];
+  if (rows.length < 1) return [];
 
   const parsedRows: Array<{ date: Date; amount: number; monthKey: string }> = [];
   for (const row of rows) {
-    const [monthRaw, amountRaw] = row.split(":").map((part) => part?.trim() ?? "");
-    if (!monthRaw || !amountRaw) return [];
+    const normalized = row.replace(/\s+/g, " ");
+    const match = normalized.match(/^(\d{4}-\d{2})\s*[:;]\s*([0-9.,]+)$/);
+    if (!match) return [];
+    const [, monthRaw, amountRaw] = match;
 
     const date = new Date(`${monthRaw}-01T00:00:00.000Z`);
     const amount = Number(amountRaw.replace(",", "."));
