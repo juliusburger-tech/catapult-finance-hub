@@ -1,5 +1,6 @@
 "use server";
 
+import { addMonths } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 
@@ -239,6 +240,34 @@ export async function addPaymentScheduleEntryForCustomer(formData: FormData) {
   revalidatePath("/kunden");
   revalidatePath(`/kunden/${customerId}`);
   revalidatePath("/rechnungen");
+}
+
+export async function shiftPaymentScheduleEntryMonth(entryId: string, deltaMonths: number) {
+  if (!entryId || !Number.isInteger(deltaMonths) || deltaMonths === 0) {
+    return;
+  }
+
+  const row = await prisma.paymentScheduleEntry.findUnique({
+    where: { id: entryId },
+    select: { id: true, dueYear: true, dueMonth: true, dueDay: true, customerId: true },
+  });
+  if (!row) return;
+
+  const currentDate = new Date(row.dueYear, row.dueMonth - 1, row.dueDay);
+  const shiftedDate = addMonths(currentDate, deltaMonths);
+
+  await prisma.paymentScheduleEntry.update({
+    where: { id: row.id },
+    data: {
+      dueYear: shiftedDate.getFullYear(),
+      dueMonth: shiftedDate.getMonth() + 1,
+      dueDay: shiftedDate.getDate(),
+    },
+  });
+
+  revalidatePath("/rechnungen");
+  revalidatePath("/kunden");
+  revalidatePath(`/kunden/${row.customerId}`);
 }
 
 export async function createOtherPayment(formData: FormData) {

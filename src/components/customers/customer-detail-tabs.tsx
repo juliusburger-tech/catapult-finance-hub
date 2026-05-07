@@ -8,6 +8,7 @@ import { Upload } from "lucide-react";
 import { deleteCustomer, updateCustomer } from "@/app/kunden/actions";
 import {
   addPaymentScheduleEntryForCustomer,
+  shiftPaymentScheduleEntryMonth,
   toggleInvoiceSent,
   togglePaid,
   toggleSepaConfirmed,
@@ -405,28 +406,42 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
                       </form>
                     </td>
                     <td className="py-3 pr-4">
-                      <form
-                        action={updatePaymentScheduleEntryFromForm.bind(null, entry.id)}
-                        className="flex min-w-[220px] items-center gap-2"
-                      >
-                        <input
-                          type="number"
-                          name="amount"
-                          min="0.01"
-                          step="0.01"
-                          defaultValue={entry.amount}
-                          className="h-8 w-24 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs"
-                        />
-                        <input
-                          type="date"
-                          name="dueDate"
-                          defaultValue={`${entry.dueYear}-${String(entry.dueMonth).padStart(2, "0")}-${String(entry.dueDay).padStart(2, "0")}`}
-                          className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs"
-                        />
-                        <Button variant="outline" size="sm">
-                          Update
-                        </Button>
-                      </form>
+                      <div className="flex min-w-[280px] flex-col gap-2">
+                        <form
+                          action={updatePaymentScheduleEntryFromForm.bind(null, entry.id)}
+                          className="flex items-center gap-2"
+                        >
+                          <input
+                            type="number"
+                            name="amount"
+                            min="0.01"
+                            step="0.01"
+                            defaultValue={entry.amount}
+                            className="h-8 w-24 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs"
+                          />
+                          <input
+                            type="date"
+                            name="dueDate"
+                            defaultValue={`${entry.dueYear}-${String(entry.dueMonth).padStart(2, "0")}-${String(entry.dueDay).padStart(2, "0")}`}
+                            className="h-8 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-xs"
+                          />
+                          <Button variant="outline" size="sm">
+                            Update
+                          </Button>
+                        </form>
+                        <div className="flex items-center gap-2">
+                          <form action={shiftPaymentScheduleEntryMonth.bind(null, entry.id, -1)}>
+                            <Button variant="outline" size="sm">
+                              -1 Monat
+                            </Button>
+                          </form>
+                          <form action={shiftPaymentScheduleEntryMonth.bind(null, entry.id, 1)}>
+                            <Button variant="outline" size="sm">
+                              +1 Monat
+                            </Button>
+                          </form>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ))}
