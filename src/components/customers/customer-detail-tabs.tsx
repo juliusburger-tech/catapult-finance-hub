@@ -7,6 +7,7 @@ import { Upload } from "lucide-react";
 
 import { deleteCustomer, updateCustomer } from "@/app/kunden/actions";
 import {
+  addPaymentScheduleEntryForCustomer,
   toggleInvoiceSent,
   togglePaid,
   toggleSepaConfirmed,
@@ -126,6 +127,7 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
       installment_2: "Rate 2",
       upfront: "Upfront",
       one_time: "Einmalig",
+      custom_rate: "Zusatzrate",
     };
     return map[type] ?? type;
   }
@@ -435,6 +437,31 @@ export function CustomerDetailTabs({ customer, entries }: CustomerDetailProps) {
             Gesamtvolumen: {formatEuro(totals.total)} | Bezahlt: {formatEuro(totals.paid)} | Ausstehend:{" "}
             {formatEuro(totals.open)}
           </p>
+          <div className="mt-4 rounded-lg border border-[var(--color-border-token)] bg-[var(--color-surface-raised)] p-4">
+            <p className="mb-2 text-sm font-semibold text-[var(--color-text)]">+ Rate hinzufügen</p>
+            <form action={addPaymentScheduleEntryForCustomer} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="customerId" value={customer.id} />
+              <input type="hidden" name="entryType" value="custom_rate" />
+              <input
+                type="number"
+                name="amount"
+                min="0.01"
+                step="0.01"
+                required
+                placeholder="Betrag"
+                className="h-9 w-32 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-sm"
+              />
+              <input
+                type="date"
+                name="dueDate"
+                required
+                className="h-9 rounded-md border border-[var(--color-border-token)] bg-[var(--color-surface)] px-2 text-sm"
+              />
+              <Button variant="outline" size="sm">
+                + Rate hinzufügen
+              </Button>
+            </form>
+          </div>
         </section>
       ) : null}
 

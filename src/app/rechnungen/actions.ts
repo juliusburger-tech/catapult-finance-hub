@@ -208,6 +208,39 @@ export async function updatePaymentScheduleEntryFromForm(entryId: string, formDa
   revalidatePath("/kunden");
 }
 
+export async function addPaymentScheduleEntryForCustomer(formData: FormData) {
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  const amount = Number(formData.get("amount"));
+  const dueDateRaw = String(formData.get("dueDate") ?? "").trim();
+  const entryTypeRaw = String(formData.get("entryType") ?? "custom_rate").trim();
+  const entryType = entryTypeRaw || "custom_rate";
+
+  if (!customerId || !Number.isFinite(amount) || amount <= 0 || !dueDateRaw) {
+    return;
+  }
+
+  const dueDate = new Date(dueDateRaw);
+  if (Number.isNaN(dueDate.getTime())) return;
+
+  await prisma.paymentScheduleEntry.create({
+    data: {
+      customerId,
+      dueDay: dueDate.getDate(),
+      dueMonth: dueDate.getMonth() + 1,
+      dueYear: dueDate.getFullYear(),
+      amount: Math.round(amount * 100) / 100,
+      entryType,
+      invoiceSent: false,
+      sepaConfirmed: false,
+      paid: false,
+    },
+  });
+
+  revalidatePath("/kunden");
+  revalidatePath(`/kunden/${customerId}`);
+  revalidatePath("/rechnungen");
+}
+
 export async function createOtherPayment(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim() || "Sonstiges";
